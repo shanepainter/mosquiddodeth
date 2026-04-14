@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiUdp.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncTCP.h>
 #include <ArduinoJson.h>
@@ -38,6 +39,26 @@ bool lastButtonState = LOW;
 unsigned long lastDebounceMs = 0;
 #define DEBOUNCE_MS 50
 
+// ── Peer discovery ──
+WiFiUDP udp;
+#define BEACON_PORT 5555
+#define BEACON_INTERVAL_MS 30000
+#define PEER_TIMEOUT_MS 90000
+#define MAX_PEERS 16
+IPAddress beaconMulticast(239, 77, 68, 1);  // "MD" = mosquitto death
+
+struct Peer {
+    String deviceId;
+    String hostname;
+    String friendlyName;
+    String ip;
+    bool active;       // spray active
+    unsigned long lastSeen;
+};
+Peer peers[MAX_PEERS];
+int peerCount = 0;
+unsigned long lastBeaconMs = 0;
+
 // ── Forward declarations ──
 void startSpray();
 void stopSpray();
@@ -45,8 +66,11 @@ void loadConfig();
 void saveConfig();
 void setupRoutes();
 String getStatusJson();
+String getDevicesJson();
 void checkSchedules();
 void checkButton();
+void sendBeacon();
+void receiveBeacons();
 
 // ════════════════════════════════════════════
 // Setup
@@ -108,6 +132,11 @@ void setup() {
         MDNS.addService("http", "tcp", 80);
     }
 
+    // UDP peer discovery
+    udp.beginMulticast(beaconMulticast, BEACON_PORT);
+    sendBeacon();  // announce immediately
+    Serial.println("[Discovery] Beacon started");
+
     // Web server
     setupRoutes();
     server.begin();
@@ -126,6 +155,12 @@ void loop() {
 
     checkButton();
     checkSchedules();
+    receiveBeacons();
+
+    // Send beacon periodically
+    if (millis() - lastBeaconMs >= BEACON_INTERVAL_MS) {
+        sendBeacon();
+    }
 
     delay(100);
 }
@@ -313,6 +348,95 @@ String getStatusJson() {
 }
 
 // ════════════════════════════════════════════
+// Peer discovery
+// ════════════════════════════════════════════
+
+void sendBeacon() {
+    JsonDocument doc;
+    doc["id"] = deviceId;
+    doc["host"] = hostname;
+    doc["name"] = friendlyName;
+    doc["ip"] = WiFi.localIP().toString();
+    doc["active"] = sprayActive;
+
+    char buf[256];
+    size_t len = serializeJson(doc, buf, sizeof(buf));
+
+    udp.beginMulticastPacket();
+    udp.write((uint8_t*)buf, len);
+    udp.endPacket();
+
+    lastBeaconMs = millis();
+}
+
+void receiveBeacons() {
+    int packetSize = udp.parsePacket();
+    if (packetSize == 0) return;
+
+    char buf[256];
+    int len = udp.read(buf, sizeof(buf) - 1);
+    if (len <= 0) return;
+    buf[len] = '\0';
+
+    JsonDocument doc;
+    if (deserializeJson(doc, buf)) return;
+
+    String peerId = doc["id"] | "";
+    if (peerId.isEmpty() || peerId == deviceId) return;  // ignore self
+
+    // Update existing or add new
+    int slot = -1;
+    for (int i = 0; i < peerCount; i++) {
+        if (peers[i].deviceId == peerId) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) {
+        if (peerCount >= MAX_PEERS) return;
+        slot = peerCount++;
+    }
+
+    peers[slot].deviceId = peerId;
+    peers[slot].hostname = doc["host"] | "";
+    peers[slot].friendlyName = doc["name"] | "";
+    peers[slot].ip = doc["ip"] | "";
+    peers[slot].active = doc["active"] | false;
+    peers[slot].lastSeen = millis();
+}
+
+String getDevicesJson() {
+    JsonDocument doc;
+    JsonArray arr = doc["devices"].to<JsonArray>();
+    unsigned long now = millis();
+
+    // Add self first
+    JsonObject self = arr.add<JsonObject>();
+    self["id"] = deviceId;
+    self["hostname"] = hostname;
+    self["name"] = friendlyName;
+    self["ip"] = WiFi.localIP().toString();
+    self["active"] = sprayActive;
+    self["self"] = true;
+
+    // Add peers (skip stale ones)
+    for (int i = 0; i < peerCount; i++) {
+        if (now - peers[i].lastSeen > PEER_TIMEOUT_MS) continue;
+        JsonObject p = arr.add<JsonObject>();
+        p["id"] = peers[i].deviceId;
+        p["hostname"] = peers[i].hostname;
+        p["name"] = peers[i].friendlyName;
+        p["ip"] = peers[i].ip;
+        p["active"] = peers[i].active;
+        p["self"] = false;
+    }
+
+    String out;
+    serializeJson(doc, out);
+    return out;
+}
+
+// ════════════════════════════════════════════
 // Web routes
 // ════════════════════════════════════════════
 
@@ -331,6 +455,11 @@ void setupRoutes() {
     // API: status
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *req) {
         req->send(200, "application/json", getStatusJson());
+    });
+
+    // API: all devices on network
+    server.on("/api/devices", HTTP_GET, [](AsyncWebServerRequest *req) {
+        req->send(200, "application/json", getDevicesJson());
     });
 
     // API: start spray

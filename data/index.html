@@ -195,6 +195,24 @@ h1 span { color: var(--red); }
   margin: 8px 0;
 }
 .device-name { text-align: center; color: var(--muted); font-size: 0.85em; margin: -12px 0 16px 0; }
+.device-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+.device-item:active { border-color: var(--blue); }
+.device-item.current { border-color: var(--blue); border-width: 2px; }
+.device-item .dev-label { font-weight: 600; font-size: 0.95em; }
+.device-item .dev-sub { font-size: 0.8em; color: var(--muted); }
+.device-item .dev-status { font-size: 0.8em; font-weight: 600; }
 .meta { font-size: 0.8em; color: var(--muted); text-align: center; margin-top: 16px; }
 </style>
 </head>
@@ -242,6 +260,11 @@ h1 span { color: var(--red); }
   <h2>Schedules</h2>
   <div id="schedules-container"></div>
   <button class="add-btn" onclick="addSchedule()">+ Add Schedule</button>
+</div>
+
+<div class="card" id="devices-card">
+  <h2>All Sprayers</h2>
+  <div id="devices-container"></div>
 </div>
 
 <div class="meta" id="uptime"></div>
@@ -434,9 +457,50 @@ function setPollRate(ms) {
   pollTimer = setInterval(() => api('/status'), ms);
 }
 
+async function loadDevices() {
+  try {
+    const r = await fetch('/api/devices');
+    const d = await r.json();
+    renderDevices(d.devices || []);
+  } catch(e) { console.error(e); }
+}
+
+function renderDevices(devices) {
+  const container = document.getElementById('devices-container');
+  container.innerHTML = '';
+  if (devices.length <= 1) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:0.85em;text-align:center;padding:8px">No other sprayers found on network</div>';
+    return;
+  }
+  devices.forEach(dev => {
+    const a = document.createElement('a');
+    a.className = 'device-item' + (dev.self ? ' current' : '');
+    a.href = dev.self ? '#' : 'http://' + dev.ip;
+    if (!dev.self) a.onclick = () => {};  // allow navigation
+    const left = document.createElement('div');
+    const label = document.createElement('div');
+    label.className = 'dev-label';
+    label.textContent = dev.name || dev.hostname;
+    const sub = document.createElement('div');
+    sub.className = 'dev-sub';
+    sub.textContent = dev.ip + (dev.self ? ' (this device)' : '');
+    left.appendChild(label);
+    left.appendChild(sub);
+    const status = document.createElement('div');
+    status.className = 'dev-status';
+    status.textContent = dev.active ? 'SPRAYING' : 'Idle';
+    status.style.color = dev.active ? 'var(--green)' : 'var(--muted)';
+    a.appendChild(left);
+    a.appendChild(status);
+    container.appendChild(a);
+  });
+}
+
 // Initial load
 api('/status');
+loadDevices();
 setPollRate(5000);
+setInterval(loadDevices, 15000);
 </script>
 </body>
 </html>
