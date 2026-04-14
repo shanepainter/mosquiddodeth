@@ -21,6 +21,9 @@ String deviceId;       // last 4 hex of MAC, e.g. "a1b2"
 String hostname;       // "mosquitto-death-a1b2"
 String friendlyName;   // user-editable, e.g. "Back Patio"
 
+// ── PIN protection ──
+String pin;            // 4-digit PIN, empty = no protection
+
 // ── Schedule ──
 // Each schedule entry: enabled, days bitmask (bit0=Sun..bit6=Sat), hour, minute
 struct ScheduleEntry {
@@ -71,6 +74,8 @@ void checkSchedules();
 void checkButton();
 void sendBeacon();
 void receiveBeacons();
+bool checkPin(AsyncWebServerRequest *req, const JsonDocument &doc);
+bool checkPinHeader(AsyncWebServerRequest *req);
 
 // ════════════════════════════════════════════
 // Setup
@@ -260,6 +265,7 @@ void loadConfig() {
     if (configuredSpraySeconds > MAX_SPRAY_SECONDS) configuredSpraySeconds = MAX_SPRAY_SECONDS;
 
     friendlyName = doc["friendly_name"] | "";
+    pin = doc["pin"] | "";
 
     JsonArray arr = doc["schedules"].as<JsonArray>();
     scheduleCount = 0;
@@ -280,6 +286,7 @@ void saveConfig() {
     JsonDocument doc;
     doc["spray_seconds"] = configuredSpraySeconds;
     doc["friendly_name"] = friendlyName;
+    doc["pin"] = pin;
 
     JsonArray arr = doc["schedules"].to<JsonArray>();
     for (int i = 0; i < scheduleCount; i++) {
@@ -329,6 +336,7 @@ String getStatusJson() {
     doc["device_id"] = deviceId;
     doc["hostname"] = hostname;
     doc["friendly_name"] = friendlyName;
+    doc["pin_enabled"] = pin.length() > 0;
     doc["ip"] = WiFi.localIP().toString();
     doc["uptime"] = millis() / 1000;
     doc["wifi_rssi"] = WiFi.RSSI();
@@ -437,6 +445,27 @@ String getDevicesJson() {
 }
 
 // ════════════════════════════════════════════
+// PIN authentication
+// ════════════════════════════════════════════
+
+// Check PIN from X-Pin header (for spray start/stop which have no body)
+bool checkPinHeader(AsyncWebServerRequest *req) {
+    if (pin.isEmpty()) return true;  // no PIN set
+    if (req->hasHeader("X-Pin") && req->header("X-Pin") == pin) return true;
+    req->send(403, "application/json", "{\"error\":\"pin_required\"}");
+    return false;
+}
+
+// Check PIN from JSON body "pin" field
+bool checkPin(AsyncWebServerRequest *req, const JsonDocument &doc) {
+    if (pin.isEmpty()) return true;  // no PIN set
+    String submitted = doc["pin"] | "";
+    if (submitted == pin) return true;
+    req->send(403, "application/json", "{\"error\":\"pin_required\"}");
+    return false;
+}
+
+// ════════════════════════════════════════════
 // Web routes
 // ════════════════════════════════════════════
 
@@ -462,14 +491,16 @@ void setupRoutes() {
         req->send(200, "application/json", getDevicesJson());
     });
 
-    // API: start spray
+    // API: start spray (PIN protected)
     server.on("/api/spray/start", HTTP_POST, [](AsyncWebServerRequest *req) {
+        if (!checkPinHeader(req)) return;
         startSpray();
         req->send(200, "application/json", getStatusJson());
     });
 
-    // API: stop spray
+    // API: stop spray (PIN protected)
     server.on("/api/spray/stop", HTTP_POST, [](AsyncWebServerRequest *req) {
+        if (!checkPinHeader(req)) return;
         stopSpray();
         req->send(200, "application/json", getStatusJson());
     });
@@ -486,6 +517,7 @@ void setupRoutes() {
             req->send(400, "application/json", "{\"error\":\"invalid json\"}");
             return;
         }
+        if (!checkPin(req, doc)) return;
         if (doc["spray_seconds"].is<int>()) {
             int s = doc["spray_seconds"];
             if (s >= 1 && s <= MAX_SPRAY_SECONDS) {
@@ -494,6 +526,13 @@ void setupRoutes() {
         }
         if (doc["friendly_name"].is<const char*>()) {
             friendlyName = doc["friendly_name"].as<String>();
+        }
+        // PIN change: send "new_pin":"1234" to set, "new_pin":"" to clear
+        if (doc["new_pin"].is<const char*>()) {
+            String newPin = doc["new_pin"].as<String>();
+            if (newPin.isEmpty() || newPin.length() == 4) {
+                pin = newPin;
+            }
         }
         saveConfig();
         req->send(200, "application/json", getStatusJson());
@@ -511,6 +550,7 @@ void setupRoutes() {
             req->send(400, "application/json", "{\"error\":\"invalid json\"}");
             return;
         }
+        if (!checkPin(req, doc)) return;
 
         JsonArray arr = doc["schedules"].as<JsonArray>();
         scheduleCount = 0;
@@ -539,6 +579,7 @@ void setupRoutes() {
             req->send(400, "application/json", "{\"error\":\"invalid json\"}");
             return;
         }
+        if (!checkPin(req, doc)) return;
         int idx = doc["index"] | -1;
         if (idx >= 0 && idx < scheduleCount) {
             for (int i = idx; i < scheduleCount - 1; i++) {

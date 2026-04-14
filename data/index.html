@@ -257,6 +257,16 @@ h1 span { color: var(--red); }
 </div>
 
 <div class="card">
+  <h2>PIN Lock</h2>
+  <div id="pin-status" style="font-size:0.9em;margin-bottom:10px;color:var(--muted)">--</div>
+  <div class="duration-row">
+    <input type="text" id="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="4 digits" style="width:80px;">
+    <button onclick="setPin()">Set PIN</button>
+    <button onclick="clearPin()" style="color:var(--red)">Remove</button>
+  </div>
+</div>
+
+<div class="card">
   <h2>Schedules</h2>
   <div id="schedules-container"></div>
   <button class="add-btn" onclick="addSchedule()">+ Add Schedule</button>
@@ -273,14 +283,40 @@ h1 span { color: var(--red); }
 const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 let state = { active: false, schedules: [], spray_seconds: 90, remaining: 0 };
 let pollTimer = null;
+let sessionPin = sessionStorage.getItem('pin') || '';
 
-async function api(path, body) {
+function promptPin() {
+  const p = prompt('Enter 4-digit PIN:');
+  if (p && p.length === 4) {
+    sessionPin = p;
+    sessionStorage.setItem('pin', p);
+    return true;
+  }
+  return false;
+}
+
+async function api(path, body, retry) {
+  const headers = {'Content-Type':'application/json'};
+  if (sessionPin) headers['X-Pin'] = sessionPin;
+  if (body !== undefined && sessionPin) body.pin = sessionPin;
   const opts = body !== undefined
-    ? { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }
-    : { method: 'GET' };
+    ? { method: 'POST', headers, body: JSON.stringify(body) }
+    : { method: 'GET', headers };
   try {
     const r = await fetch('/api' + path, opts);
+    if (r.status === 403 && !retry) {
+      if (promptPin()) {
+        return api(path, body, true);
+      }
+      return null;
+    }
     const d = await r.json();
+    if (d.error === 'pin_required' && !retry) {
+      if (promptPin()) {
+        return api(path, body, true);
+      }
+      return null;
+    }
     updateUI(d);
     return d;
   } catch(e) {
@@ -346,6 +382,11 @@ function updateUI(d) {
     const m = Math.floor((d.uptime % 3600) / 60);
     document.getElementById('uptime').textContent = `${d.hostname || ''} · ${d.ip || ''} · Uptime: ${h}h ${m}m`;
   }
+
+  // PIN status
+  const pinStatusEl = document.getElementById('pin-status');
+  pinStatusEl.textContent = d.pin_enabled ? 'PIN is set' : 'No PIN — anyone on the network can control this device';
+  pinStatusEl.style.color = d.pin_enabled ? 'var(--green)' : 'var(--orange)';
 
   // Schedules
   renderSchedules(d.schedules || []);
@@ -433,6 +474,26 @@ async function saveDuration() {
 async function saveName() {
   const v = document.getElementById('name-input').value.trim();
   await api('/config', { friendly_name: v });
+}
+
+async function setPin() {
+  const v = document.getElementById('pin-input').value.trim();
+  if (v.length !== 4 || !/^\d{4}$/.test(v)) {
+    alert('PIN must be exactly 4 digits');
+    return;
+  }
+  const result = await api('/config', { new_pin: v });
+  if (result) {
+    sessionPin = v;
+    sessionStorage.setItem('pin', v);
+    document.getElementById('pin-input').value = '';
+  }
+}
+
+async function clearPin() {
+  await api('/config', { new_pin: '' });
+  sessionPin = '';
+  sessionStorage.removeItem('pin');
 }
 
 async function saveSchedules() {
