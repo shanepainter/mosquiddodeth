@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mosquitto Death">
+<title>Mosquitto Death</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --card: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --green: #3fb950;
+  --red: #f85149;
+  --blue: #58a6ff;
+  --orange: #d29922;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding: 16px;
+  padding-top: env(safe-area-inset-top, 16px);
+  max-width: 500px;
+  margin: 0 auto;
+  -webkit-user-select: none;
+  user-select: none;
+}
+h1 { font-size: 1.4em; margin-bottom: 16px; text-align: center; }
+h1 span { color: var(--red); }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.card h2 { font-size: 0.85em; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+.status-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.status-row:last-child { margin-bottom: 0; }
+.status-label { color: var(--muted); font-size: 0.9em; }
+.status-value { font-weight: 600; }
+.active { color: var(--green); }
+.inactive { color: var(--muted); }
+
+/* Big spray button */
+.spray-btn {
+  display: block;
+  width: 100%;
+  padding: 20px;
+  border: none;
+  border-radius: 12px;
+  font-size: 1.2em;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.spray-btn:active { transform: scale(0.97); }
+.spray-btn.start { background: var(--green); color: #000; }
+.spray-btn.stop { background: var(--red); color: #fff; }
+.spray-btn:disabled { opacity: 0.5; }
+
+/* Duration input */
+.duration-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.duration-row input {
+  width: 80px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1em;
+  text-align: center;
+}
+.duration-row button {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--blue);
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+/* Schedule */
+.schedule-entry {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+.schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.schedule-time {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.schedule-time input {
+  width: 60px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 1em;
+  text-align: center;
+}
+.day-pills { display: flex; gap: 4px; flex-wrap: wrap; }
+.day-pill {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.75em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.day-pill.on {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+.toggle {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--border);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.toggle.on { background: var(--green); }
+.toggle::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s;
+}
+.toggle.on::after { transform: translateX(20px); }
+.remove-btn {
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.add-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--blue);
+  font-size: 0.9em;
+  cursor: pointer;
+}
+.countdown {
+  font-size: 2em;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--green);
+  margin: 8px 0;
+}
+.meta { font-size: 0.8em; color: var(--muted); text-align: center; margin-top: 16px; }
+</style>
+</head>
+<body>
+<h1>Mosquitto <span>Death</span></h1>
+
+<div class="card" id="status-card">
+  <h2>Status</h2>
+  <div class="countdown" id="countdown" style="display:none">--</div>
+  <div class="status-row">
+    <span class="status-label">Pump</span>
+    <span class="status-value" id="pump-status">--</span>
+  </div>
+  <div class="status-row">
+    <span class="status-label">WiFi</span>
+    <span class="status-value" id="wifi-rssi">--</span>
+  </div>
+  <div class="status-row">
+    <span class="status-label">Time</span>
+    <span class="status-value" id="device-time">--</span>
+  </div>
+</div>
+
+<button class="spray-btn start" id="spray-btn" onclick="toggleSpray()">SPRAY</button>
+
+<div class="card" style="margin-top:12px">
+  <h2>Duration</h2>
+  <div class="duration-row">
+    <input type="number" id="duration-input" min="1" max="600" value="90">
+    <span class="status-label">seconds</span>
+    <button onclick="saveDuration()">Save</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Schedules</h2>
+  <div id="schedules-container"></div>
+  <button class="add-btn" onclick="addSchedule()">+ Add Schedule</button>
+</div>
+
+<div class="meta" id="uptime"></div>
+
+<script>
+const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+let state = { active: false, schedules: [], spray_seconds: 90, remaining: 0 };
+let pollTimer = null;
+
+async function api(path, body) {
+  const opts = body !== undefined
+    ? { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }
+    : { method: 'GET' };
+  try {
+    const r = await fetch('/api' + path, opts);
+    const d = await r.json();
+    updateUI(d);
+    return d;
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+function updateUI(d) {
+  if (!d) return;
+  state = d;
+
+  // Pump status
+  const pumpEl = document.getElementById('pump-status');
+  const countdownEl = document.getElementById('countdown');
+  const btn = document.getElementById('spray-btn');
+
+  if (d.active) {
+    pumpEl.textContent = 'ACTIVE';
+    pumpEl.className = 'status-value active';
+    countdownEl.style.display = 'block';
+    countdownEl.textContent = d.remaining + 's';
+    btn.textContent = 'STOP';
+    btn.className = 'spray-btn stop';
+    // Poll faster when active
+    setPollRate(1000);
+  } else {
+    pumpEl.textContent = 'Idle';
+    pumpEl.className = 'status-value inactive';
+    countdownEl.style.display = 'none';
+    btn.textContent = 'SPRAY';
+    btn.className = 'spray-btn start';
+    setPollRate(5000);
+  }
+
+  // WiFi
+  const rssi = d.wifi_rssi || 0;
+  const rssiEl = document.getElementById('wifi-rssi');
+  rssiEl.textContent = rssi + ' dBm';
+  rssiEl.style.color = rssi > -60 ? 'var(--green)' : rssi > -75 ? 'var(--orange)' : 'var(--red)';
+
+  // Time
+  document.getElementById('device-time').textContent = d.time || '--';
+
+  // Duration input
+  document.getElementById('duration-input').value = d.spray_seconds || 90;
+
+  // Uptime
+  if (d.uptime !== undefined) {
+    const h = Math.floor(d.uptime / 3600);
+    const m = Math.floor((d.uptime % 3600) / 60);
+    document.getElementById('uptime').textContent = `Uptime: ${h}h ${m}m`;
+  }
+
+  // Schedules
+  renderSchedules(d.schedules || []);
+}
+
+function renderSchedules(scheds) {
+  const container = document.getElementById('schedules-container');
+  container.innerHTML = '';
+  scheds.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'schedule-entry';
+
+    const header = document.createElement('div');
+    header.className = 'schedule-header';
+
+    const toggle = document.createElement('div');
+    toggle.className = 'toggle' + (s.enabled ? ' on' : '');
+    toggle.onclick = () => { s.enabled = !s.enabled; saveSchedules(); };
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-btn';
+    removeBtn.textContent = '\u00d7';
+    removeBtn.onclick = () => deleteSchedule(i);
+
+    header.appendChild(toggle);
+    header.appendChild(removeBtn);
+    div.appendChild(header);
+
+    // Time inputs
+    const timeRow = document.createElement('div');
+    timeRow.className = 'schedule-time';
+    const hourIn = document.createElement('input');
+    hourIn.type = 'number'; hourIn.min = 0; hourIn.max = 23;
+    hourIn.value = String(s.hour).padStart(2, '0');
+    hourIn.onchange = () => { s.hour = parseInt(hourIn.value) || 0; saveSchedules(); };
+    const sep = document.createElement('span');
+    sep.textContent = ':';
+    sep.style.color = 'var(--muted)';
+    sep.style.fontSize = '1.2em';
+    const minIn = document.createElement('input');
+    minIn.type = 'number'; minIn.min = 0; minIn.max = 59;
+    minIn.value = String(s.minute).padStart(2, '0');
+    minIn.onchange = () => { s.minute = parseInt(minIn.value) || 0; saveSchedules(); };
+    timeRow.appendChild(hourIn);
+    timeRow.appendChild(sep);
+    timeRow.appendChild(minIn);
+    div.appendChild(timeRow);
+
+    // Day pills
+    const pills = document.createElement('div');
+    pills.className = 'day-pills';
+    DAYS.forEach((name, d) => {
+      const pill = document.createElement('div');
+      pill.className = 'day-pill' + ((s.days & (1 << d)) ? ' on' : '');
+      pill.textContent = name;
+      pill.onclick = () => {
+        s.days ^= (1 << d);
+        saveSchedules();
+      };
+      pills.appendChild(pill);
+    });
+    div.appendChild(pills);
+    container.appendChild(div);
+  });
+}
+
+async function toggleSpray() {
+  const btn = document.getElementById('spray-btn');
+  btn.disabled = true;
+  if (state.active) {
+    await api('/spray/stop');
+  } else {
+    await api('/spray/start');
+  }
+  btn.disabled = false;
+}
+
+async function saveDuration() {
+  const v = parseInt(document.getElementById('duration-input').value);
+  if (v >= 1 && v <= 600) {
+    await api('/config', { spray_seconds: v });
+  }
+}
+
+async function saveSchedules() {
+  await api('/schedules', { schedules: state.schedules || [] });
+}
+
+function addSchedule() {
+  const scheds = state.schedules || [];
+  if (scheds.length >= 8) return;
+  scheds.push({ enabled: true, days: 0b0100100, hour: 6, minute: 0 }); // Tue+Sat 6:00
+  state.schedules = scheds;
+  renderSchedules(scheds);
+  saveSchedules();
+}
+
+async function deleteSchedule(i) {
+  await api('/schedules/delete', { index: i });
+}
+
+function setPollRate(ms) {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(() => api('/status'), ms);
+}
+
+// Initial load
+api('/status');
+setPollRate(5000);
+</script>
+</body>
+</html>
