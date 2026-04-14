@@ -6,6 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Mosquitto Death">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/icon-512.png">
 <title>Mosquitto Death</title>
 <style>
 :root {
@@ -192,11 +194,13 @@ h1 span { color: var(--red); }
   color: var(--green);
   margin: 8px 0;
 }
+.device-name { text-align: center; color: var(--muted); font-size: 0.85em; margin: -12px 0 16px 0; }
 .meta { font-size: 0.8em; color: var(--muted); text-align: center; margin-top: 16px; }
 </style>
 </head>
 <body>
 <h1>Mosquitto <span>Death</span></h1>
+<div class="device-name" id="device-name"></div>
 
 <div class="card" id="status-card">
   <h2>Status</h2>
@@ -223,6 +227,14 @@ h1 span { color: var(--red); }
     <input type="number" id="duration-input" min="1" max="600" value="90">
     <span class="status-label">seconds</span>
     <button onclick="saveDuration()">Save</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Device Name</h2>
+  <div class="duration-row">
+    <input type="text" id="name-input" maxlength="32" placeholder="e.g. Back Patio" style="width:160px;text-align:left;">
+    <button onclick="saveName()">Save</button>
   </div>
 </div>
 
@@ -256,6 +268,19 @@ async function api(path, body) {
 function updateUI(d) {
   if (!d) return;
   state = d;
+
+  // Device identity
+  const nameEl = document.getElementById('device-name');
+  const label = d.friendly_name || d.hostname || '';
+  const sub = d.friendly_name ? `${d.hostname}.local` : '';
+  nameEl.textContent = sub ? `${label} (${sub})` : `${label}.local`;
+  document.title = (d.friendly_name || 'Mosquitto Death') + ' — Spray Control';
+
+  // Name input — only set if not focused
+  const nameInput = document.getElementById('name-input');
+  if (document.activeElement !== nameInput) {
+    nameInput.value = d.friendly_name || '';
+  }
 
   // Pump status
   const pumpEl = document.getElementById('pump-status');
@@ -296,7 +321,7 @@ function updateUI(d) {
   if (d.uptime !== undefined) {
     const h = Math.floor(d.uptime / 3600);
     const m = Math.floor((d.uptime % 3600) / 60);
-    document.getElementById('uptime').textContent = `Uptime: ${h}h ${m}m`;
+    document.getElementById('uptime').textContent = `${d.hostname || ''} · ${d.ip || ''} · Uptime: ${h}h ${m}m`;
   }
 
   // Schedules
@@ -380,6 +405,11 @@ async function saveDuration() {
   if (v >= 1 && v <= 600) {
     await api('/config', { spray_seconds: v });
   }
+}
+
+async function saveName() {
+  const v = document.getElementById('name-input').value.trim();
+  await api('/config', { friendly_name: v });
 }
 
 async function saveSchedules() {

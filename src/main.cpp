@@ -15,6 +15,11 @@ unsigned long sprayStartMs = 0;
 unsigned long sprayDurationMs = DEFAULT_SPRAY_SECONDS * 1000UL;
 int configuredSpraySeconds = DEFAULT_SPRAY_SECONDS;
 
+// ── Device identity ──
+String deviceId;       // last 4 hex of MAC, e.g. "a1b2"
+String hostname;       // "mosquitto-death-a1b2"
+String friendlyName;   // user-editable, e.g. "Back Patio"
+
 // ── Schedule ──
 // Each schedule entry: enabled, days bitmask (bit0=Sun..bit6=Sat), hour, minute
 struct ScheduleEntry {
@@ -49,7 +54,16 @@ void checkButton();
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n[mosquitto-death] Starting...");
+
+    // Derive unique device ID from MAC address
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    char idBuf[5];
+    snprintf(idBuf, sizeof(idBuf), "%02x%02x", mac[4], mac[5]);
+    deviceId = String(idBuf);
+    hostname = String(MDNS_HOSTNAME) + "-" + deviceId;
+
+    Serial.printf("\n[mosquitto-death] Device %s starting...\n", hostname.c_str());
 
     // GPIO
     pinMode(RELAY_PIN, OUTPUT);
@@ -88,9 +102,9 @@ void setup() {
     configTime(TZ_OFFSET, TZ_DST, NTP_SERVER);
     Serial.println("[NTP] Time sync requested");
 
-    // mDNS
-    if (MDNS.begin(MDNS_HOSTNAME)) {
-        Serial.printf("[mDNS] http://%s.local\n", MDNS_HOSTNAME);
+    // mDNS — unique per device
+    if (MDNS.begin(hostname.c_str())) {
+        Serial.printf("[mDNS] http://%s.local\n", hostname.c_str());
         MDNS.addService("http", "tcp", 80);
     }
 
@@ -210,6 +224,8 @@ void loadConfig() {
     if (configuredSpraySeconds < 1) configuredSpraySeconds = 1;
     if (configuredSpraySeconds > MAX_SPRAY_SECONDS) configuredSpraySeconds = MAX_SPRAY_SECONDS;
 
+    friendlyName = doc["friendly_name"] | "";
+
     JsonArray arr = doc["schedules"].as<JsonArray>();
     scheduleCount = 0;
     for (JsonObject obj : arr) {
@@ -228,6 +244,7 @@ void loadConfig() {
 void saveConfig() {
     JsonDocument doc;
     doc["spray_seconds"] = configuredSpraySeconds;
+    doc["friendly_name"] = friendlyName;
 
     JsonArray arr = doc["schedules"].to<JsonArray>();
     for (int i = 0; i < scheduleCount; i++) {
@@ -274,6 +291,10 @@ String getStatusJson() {
         doc["weekday"] = timeinfo.tm_wday;
     }
 
+    doc["device_id"] = deviceId;
+    doc["hostname"] = hostname;
+    doc["friendly_name"] = friendlyName;
+    doc["ip"] = WiFi.localIP().toString();
     doc["uptime"] = millis() / 1000;
     doc["wifi_rssi"] = WiFi.RSSI();
 
@@ -296,9 +317,15 @@ String getStatusJson() {
 // ════════════════════════════════════════════
 
 void setupRoutes() {
-    // Serve the web UI
+    // Serve the web UI and static assets
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
         req->send(LittleFS, "/index.html", "text/html");
+    });
+    server.on("/apple-touch-icon.png", HTTP_GET, [](AsyncWebServerRequest *req) {
+        req->send(LittleFS, "/apple-touch-icon.png", "image/png");
+    });
+    server.on("/icon-512.png", HTTP_GET, [](AsyncWebServerRequest *req) {
+        req->send(LittleFS, "/icon-512.png", "image/png");
     });
 
     // API: status
@@ -330,11 +357,14 @@ void setupRoutes() {
             req->send(400, "application/json", "{\"error\":\"invalid json\"}");
             return;
         }
-        if (doc.containsKey("spray_seconds")) {
+        if (doc["spray_seconds"].is<int>()) {
             int s = doc["spray_seconds"];
             if (s >= 1 && s <= MAX_SPRAY_SECONDS) {
                 configuredSpraySeconds = s;
             }
+        }
+        if (doc["friendly_name"].is<const char*>()) {
+            friendlyName = doc["friendly_name"].as<String>();
         }
         saveConfig();
         req->send(200, "application/json", getStatusJson());

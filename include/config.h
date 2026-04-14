@@ -20,4 +20,4 @@
 
 // ── mDNS ──
 #define MDNS_HOSTNAME "mosquitto-death"
-// Access at http://mosquitto-death.local
+// Each device appends last 4 hex of MAC: http://mosquitto-death-a1b2.local

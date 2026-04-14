@@ -1,0 +1,379 @@
+<mxfile host="app.diagrams.net" modified="2026-04-14" agent="Claude" version="24.0.0" type="device">
+  <diagram id="wiring" name="Mosquitto Death Wiring">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="&lt;b&gt;MOSQUITTO DEATH — Wiring Diagram&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;" vertex="1" parent="1">
+          <mxGeometry x="500" y="20" width="500" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- 12V Power Supply (IP67 60W)            -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="psu" value="&lt;b&gt;12V 60W Power Supply&lt;/b&gt;&lt;br&gt;(IP67 LED Driver)&lt;br&gt;AC 100-265V → DC 12V 5A" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;arcSize=8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="300" width="220" height="100" as="geometry" />
+        </mxCell>
+        <!-- PSU output labels -->
+        <mxCell id="psu_vplus" value="&lt;b&gt;V+ (12V)&lt;/b&gt;" style="text;html=1;align=left;fontSize=11;fontColor=#CC0000;" vertex="1" parent="1">
+          <mxGeometry x="310" y="310" width="80" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="psu_vminus" value="&lt;b&gt;V− (GND)&lt;/b&gt;" style="text;html=1;align=left;fontSize=11;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="310" y="370" width="80" height="20" as="geometry" />
+        </mxCell>
+        <!-- AC input label -->
+        <mxCell id="psu_ac" value="AC In&lt;br&gt;(wall outlet)" style="text;html=1;align=center;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="120" y="250" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="psu_ac_wire" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;strokeWidth=1;dashed=1;" edge="1" parent="1" source="psu_ac" target="psu">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- 12V Distribution Bus                   -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="bus12v" value="" style="shape=line;strokeColor=#CC0000;strokeWidth=4;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="315" width="500" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="bus12v_label" value="&lt;font color=&quot;#CC0000&quot;&gt;&lt;b&gt;12V Rail&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="580" y="295" width="80" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- GND Bus -->
+        <mxCell id="busgnd" value="" style="shape=line;strokeColor=#333333;strokeWidth=4;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="375" width="500" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="busgnd_label" value="&lt;b&gt;GND Rail&lt;/b&gt;" style="text;html=1;align=center;fontSize=11;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="580" y="390" width="80" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- PSU to 12V bus -->
+        <mxCell id="psu_to_12v" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#CC0000;strokeWidth=3;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="320" as="sourcePoint" />
+            <mxPoint x="400" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <!-- PSU to GND bus -->
+        <mxCell id="psu_to_gnd" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#333333;strokeWidth=3;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="380" as="sourcePoint" />
+            <mxPoint x="400" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- Buck Converter (12V → 5V)              -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="buck" value="&lt;b&gt;Buck Converter&lt;/b&gt;&lt;br&gt;IN: 5-30V → OUT: 5V 1.8A" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;arcSize=8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="420" y="470" width="200" height="80" as="geometry" />
+        </mxCell>
+        <!-- Buck pin labels -->
+        <mxCell id="buck_in_plus" value="IN+" style="text;html=1;align=center;fontSize=10;fontColor=#CC0000;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="450" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="buck_in_minus" value="IN−" style="text;html=1;align=center;fontSize=10;fontColor=#333333;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="480" y="450" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="buck_out_plus" value="OUT+" style="text;html=1;align=center;fontSize=10;fontColor=#FF6600;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="530" y="450" width="40" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="buck_out_minus" value="OUT−" style="text;html=1;align=center;fontSize=10;fontColor=#333333;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="580" y="450" width="40" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- 12V bus down to buck IN+ -->
+        <mxCell id="bus12v_to_buck" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#CC0000;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="445" y="325" as="sourcePoint" />
+            <mxPoint x="445" y="470" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <!-- GND bus down to buck IN- -->
+        <mxCell id="busgnd_to_buck" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="495" y="385" as="sourcePoint" />
+            <mxPoint x="495" y="470" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- ESP32-U                                -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="esp32" value="&lt;b&gt;ESP32-U&lt;/b&gt;&lt;br&gt;(WROOM-32U)&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#999999&quot; style=&quot;font-size:10px&quot;&gt;External antenna required&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;arcSize=8;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="420" y="620" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- ESP32 pin labels on left side -->
+        <mxCell id="esp_vin" value="&lt;b&gt;VIN (5V)&lt;/b&gt;" style="text;html=1;align=right;fontSize=10;fontColor=#FF6600;" vertex="1" parent="1">
+          <mxGeometry x="340" y="635" width="70" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_gnd" value="&lt;b&gt;GND&lt;/b&gt;" style="text;html=1;align=right;fontSize=10;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="340" y="665" width="70" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_gpio26" value="&lt;b&gt;GPIO 26&lt;/b&gt;" style="text;html=1;align=left;fontSize=10;fontColor=#0066CC;" vertex="1" parent="1">
+          <mxGeometry x="625" y="635" width="70" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_gpio27" value="&lt;b&gt;GPIO 27&lt;/b&gt;" style="text;html=1;align=left;fontSize=10;fontColor=#0066CC;" vertex="1" parent="1">
+          <mxGeometry x="625" y="665" width="70" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_3v3" value="&lt;b&gt;3V3&lt;/b&gt;" style="text;html=1;align=left;fontSize=10;fontColor=#FF6600;" vertex="1" parent="1">
+          <mxGeometry x="625" y="700" width="70" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Buck OUT+ to ESP32 VIN -->
+        <mxCell id="buck_to_esp_vin" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#FF6600;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="550" y="550" as="sourcePoint" />
+            <mxPoint x="520" y="620" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="550" y="590" />
+              <mxPoint x="520" y="590" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="buck_to_esp_vin_label" value="5V" style="text;html=1;align=center;fontSize=10;fontColor=#FF6600;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="540" y="575" width="30" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Buck OUT- to ESP32 GND -->
+        <mxCell id="buck_to_esp_gnd" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="600" y="550" as="sourcePoint" />
+            <mxPoint x="480" y="620" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="600" y="600" />
+              <mxPoint x="480" y="600" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- Relay Module                           -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="relay" value="&lt;b&gt;Relay Module&lt;/b&gt;&lt;br&gt;(5V coil, opto-isolated)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;arcSize=8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="800" y="470" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Relay control side labels (bottom) -->
+        <mxCell id="relay_vcc" value="VCC" style="text;html=1;align=center;fontSize=10;fontColor=#FF6600;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="810" y="555" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="relay_gnd_label" value="GND" style="text;html=1;align=center;fontSize=10;fontColor=#333333;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="855" y="555" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="relay_in" value="IN" style="text;html=1;align=center;fontSize=10;fontColor=#0066CC;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="905" y="555" width="20" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Relay switched side labels (top) -->
+        <mxCell id="relay_com" value="COM" style="text;html=1;align=center;fontSize=10;fontColor=#CC0000;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="815" y="450" width="35" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="relay_no" value="NO" style="text;html=1;align=center;fontSize=10;fontColor=#009900;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="875" y="450" width="25" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="relay_nc" value="NC" style="text;html=1;align=center;fontSize=10;fontColor=#999999;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="940" y="450" width="25" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- 12V bus to relay COM -->
+        <mxCell id="bus12v_to_relay_com" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#CC0000;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="833" y="325" as="sourcePoint" />
+            <mxPoint x="833" y="470" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- GND bus to relay GND -->
+        <mxCell id="busgnd_to_relay_gnd" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="870" y="385" as="sourcePoint" />
+            <mxPoint x="870" y="590" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="870" y="420" />
+              <mxPoint x="770" y="420" />
+              <mxPoint x="770" y="590" />
+              <mxPoint x="870" y="590" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ESP32 3V3 to relay VCC -->
+        <mxCell id="esp_3v3_to_relay_vcc" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#FF6600;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="620" y="710" as="sourcePoint" />
+            <mxPoint x="825" y="575" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="710" y="710" />
+              <mxPoint x="710" y="590" />
+              <mxPoint x="825" y="590" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="relay_vcc_note" value="&lt;font color=&quot;#999999&quot; style=&quot;font-size:9px&quot;&gt;If relay doesn't trigger reliably at 3.3V,&lt;br&gt;connect VCC to 5V from buck converter instead&lt;/font&gt;" style="text;html=1;align=left;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="700" y="730" width="240" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ESP32 GPIO26 to relay IN -->
+        <mxCell id="esp_gpio26_to_relay_in" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#0066CC;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="620" y="645" as="sourcePoint" />
+            <mxPoint x="915" y="575" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="740" y="645" />
+              <mxPoint x="740" y="610" />
+              <mxPoint x="915" y="610" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="gpio26_label_wire" value="&lt;font color=&quot;#0066CC&quot;&gt;Signal (GPIO 26)&lt;/font&gt;" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="730" y="617" width="100" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- 12V Pump                               -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="pump" value="&lt;b&gt;12V DC Pump&lt;/b&gt;&lt;br&gt;(~2A draw)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;arcSize=8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="300" width="180" height="80" as="geometry" />
+        </mxCell>
+        <!-- Pump pin labels -->
+        <mxCell id="pump_vplus" value="V+" style="text;html=1;align=center;fontSize=10;fontColor=#CC0000;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="310" width="25" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="pump_vminus" value="V−" style="text;html=1;align=center;fontSize=10;fontColor=#333333;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="355" width="25" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Relay NO to pump V+ -->
+        <mxCell id="relay_no_to_pump" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#009900;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="888" y="470" as="sourcePoint" />
+            <mxPoint x="1050" y="320" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="888" y="440" />
+              <mxPoint x="1020" y="440" />
+              <mxPoint x="1020" y="320" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="relay_no_wire_label" value="&lt;font color=&quot;#009900&quot;&gt;Switched 12V&lt;/font&gt;" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="930" y="420" width="80" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Pump GND to GND bus -->
+        <mxCell id="pump_to_gnd" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1050" y="365" as="sourcePoint" />
+            <mxPoint x="900" y="380" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="950" y="365" />
+              <mxPoint x="950" y="380" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- Manual Button                          -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="button" value="&lt;b&gt;Pushbutton&lt;/b&gt;&lt;br&gt;(momentary, NO)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;arcSize=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="800" width="140" height="60" as="geometry" />
+        </mxCell>
+        <!-- Button to GPIO27 -->
+        <mxCell id="btn_to_gpio27" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#0066CC;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="560" y="820" as="sourcePoint" />
+            <mxPoint x="620" y="675" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="660" y="820" />
+              <mxPoint x="660" y="675" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="btn_gpio27_label" value="&lt;font color=&quot;#0066CC&quot;&gt;GPIO 27&lt;/font&gt;" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="660" y="750" width="55" height="20" as="geometry" />
+        </mxCell>
+        <!-- Button to GND -->
+        <mxCell id="btn_to_gnd" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="420" y="830" as="sourcePoint" />
+            <mxPoint x="350" y="675" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="350" y="830" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="btn_gnd_label" value="&lt;font color=&quot;#333333&quot;&gt;GND&lt;/font&gt;" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="330" y="750" width="35" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="btn_note" value="&lt;font color=&quot;#999999&quot; style=&quot;font-size:9px&quot;&gt;Uses internal pull-down resistor&lt;br&gt;(INPUT_PULLDOWN in firmware)&lt;br&gt;Press connects GPIO 27 → GND&lt;/font&gt;" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="380" y="870" width="210" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- External Antenna note                  -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="antenna" value="📡 &lt;b&gt;2.4GHz Antenna&lt;/b&gt;&lt;br&gt;(U.FL / IPEX connector)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;arcSize=8;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="310" y="620" width="100" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- Legend                                  -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="legend_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#CCCCCC;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="500" width="180" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_title" value="&lt;b&gt;Wire Colors&lt;/b&gt;" style="text;html=1;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="505" width="100" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_12v" value="" style="shape=line;strokeColor=#CC0000;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="1115" y="535" width="30" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_12v_t" value="12V Power" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1155" y="530" width="80" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_5v" value="" style="shape=line;strokeColor=#FF6600;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="1115" y="560" width="30" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_5v_t" value="5V / 3.3V" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1155" y="555" width="80" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_gnd" value="" style="shape=line;strokeColor=#333333;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="1115" y="585" width="30" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_gnd_t" value="Ground" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1155" y="580" width="80" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_sig" value="" style="shape=line;strokeColor=#0066CC;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="1115" y="610" width="30" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_sig_t" value="Signal / GPIO" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1155" y="605" width="90" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_sw" value="" style="shape=line;strokeColor=#009900;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="1115" y="635" width="30" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_sw_t" value="Switched 12V" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1155" y="630" width="90" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- Parts List                             -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="parts_box" value="&lt;b&gt;Parts List&lt;/b&gt;&lt;hr&gt;&lt;div style=&quot;text-align:left;font-size:10px;line-height:1.6&quot;&gt;1. 12V 60W IP67 Power Supply&lt;br&gt;2. 5V 1.8A Buck Converter (12V→5V)&lt;br&gt;3. ESP32-U (WROOM-32U) + 2.4GHz antenna&lt;br&gt;4. 5V Relay Module (opto-isolated)&lt;br&gt;5. 12V DC Pump (~2A)&lt;br&gt;6. Momentary pushbutton (optional)&lt;br&gt;7. Weatherproof enclosure&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#CCCCCC;arcSize=4;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="110" width="250" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- Flow note                              -->
+        <!-- ═══════════════════════════════════════ -->
+        <mxCell id="flow_note" value="&lt;b&gt;Signal Flow:&lt;/b&gt; ESP32 GPIO 26 HIGH → Relay IN triggers → Relay closes NO→COM → 12V reaches pump → pump runs for configured duration (default 90s)" style="text;html=1;align=left;fontSize=10;fontColor=#666666;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="80" y="930" width="700" height="30" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
