@@ -259,6 +259,17 @@ body {
 .device-item .dev-sub { font-size: 0.8em; color: var(--muted); }
 .device-item .dev-status { font-size: 0.8em; font-weight: 600; }
 
+.log-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85em;
+}
+.log-entry:last-child { border-bottom: none; }
+.log-time { color: var(--muted); font-size: 0.8em; }
+.log-trigger { color: var(--blue); font-size: 0.8em; }
 .meta { font-size: 0.8em; color: var(--muted); text-align: center; margin-top: 16px; }
 </style>
 </head>
@@ -306,6 +317,15 @@ body {
     <input type="text" id="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="4 digits" style="width:80px;">
     <button class="btn btn-sm btn-outline" onclick="setPin()">Set PIN</button>
     <button class="btn btn-sm btn-outline" onclick="clearPin()" style="color:var(--red)">Remove</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Run History</h2>
+  <div id="log-container" style="max-height:300px;overflow-y:auto"></div>
+  <div class="field-row" style="margin-top:8px;justify-content:space-between">
+    <button class="btn btn-sm btn-outline" onclick="loadLog()">Refresh</button>
+    <button class="btn btn-sm btn-outline" onclick="clearLog()" style="color:var(--red)">Clear</button>
   </div>
 </div>
 
@@ -653,9 +673,40 @@ function renderDevices(devices) {
   });
 }
 
+async function loadLog() {
+  try {
+    const r = await fetch('/api/log');
+    const text = await r.text();
+    const container = document.getElementById('log-container');
+    if (!text.trim()) {
+      container.innerHTML = '<div style="color:var(--muted);font-size:0.85em;text-align:center;padding:12px">No runs recorded yet</div>';
+      return;
+    }
+    const lines = text.trim().split('\n').reverse();  // newest first
+    container.innerHTML = '';
+    lines.slice(0, 50).forEach(line => {
+      try {
+        const e = JSON.parse(line);
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        div.innerHTML = `<div><b>${e.name}</b> <span class="log-trigger">${e.trigger}</span><br><span class="log-time">${e.t}</span></div><div>${e.sec}s</div>`;
+        container.appendChild(div);
+      } catch(err) {}
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function clearLog() {
+  const headers = {};
+  if (sessionPin) headers['X-Pin'] = sessionPin;
+  await fetch('/api/log/clear', { method: 'POST', headers });
+  loadLog();
+}
+
 // Init
 api('/status');
 loadDevices();
+loadLog();
 setPollRate(5000);
 setInterval(loadDevices, 15000);
 </script>

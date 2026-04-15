@@ -12,7 +12,11 @@
 #include <time.h>
 #include "config.h"
 
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
+
+// ── Run log (ring buffer on flash) ──
+#define LOG_FILE "/runlog.jsonl"
+#define LOG_MAX_BYTES 65536  // 64KB max, oldest entries trimmed
 
 // ── State ──
 AsyncWebServer server(80);
@@ -48,6 +52,7 @@ struct Zone {
     int spraySeconds;
     bool active;
     unsigned long startMs;
+    const char* trigger;  // "manual", "schedule", "button", "run-all"
     ScheduleEntry schedules[MAX_SCHEDULES_PER_ZONE];
     int scheduleCount;
     bool lastScheduleFired[MAX_SCHEDULES_PER_ZONE];
@@ -93,7 +98,7 @@ String wifiSSID;
 String wifiPass;
 
 // ── Forward declarations ──
-void startZone(int z);
+void startZone(int z, const char* trigger = "manual");
 void stopZone(int z);
 void stopAll();
 void enqueueZone(int z);
@@ -116,6 +121,8 @@ bool checkPin(AsyncWebServerRequest *req, const JsonDocument &doc);
 bool checkPinHeader(AsyncWebServerRequest *req);
 void checkWifiReconnect();
 void setupOTARoute();
+void logRun(int zone, const char* trigger, int durationSec);
+void trimLog();
 
 // ════════════════════════════════════════════
 // Queue operations
@@ -146,7 +153,7 @@ int dequeueZone() {
 void processQueue() {
     if (activeZone >= 0) return;  // something is running
     int z = dequeueZone();
-    if (z >= 0) startZone(z);
+    if (z >= 0) startZone(z, "queue");
 }
 
 // ════════════════════════════════════════════
@@ -366,7 +373,7 @@ void loop() {
 // Zone control
 // ════════════════════════════════════════════
 
-void startZone(int z) {
+void startZone(int z, const char* trigger) {
     if (z < 0 || z >= NUM_ZONES) return;
     if (zones[z].active) return;
 
@@ -379,13 +386,18 @@ void startZone(int z) {
 
     zones[z].active = true;
     zones[z].startMs = millis();
+    zones[z].trigger = trigger;
     digitalWrite(zones[z].relayPin, HIGH);
     activeZone = z;
-    Serial.printf("[Zone %d] %s ON for %ds\n", z, zones[z].name.c_str(), zones[z].spraySeconds);
+    Serial.printf("[Zone %d] %s ON for %ds (%s)\n", z, zones[z].name.c_str(), zones[z].spraySeconds, trigger);
 }
 
 void stopZone(int z) {
     if (z < 0 || z >= NUM_ZONES) return;
+    if (zones[z].active) {
+        int ran = (millis() - zones[z].startMs) / 1000;
+        logRun(z, zones[z].trigger ? zones[z].trigger : "unknown", ran);
+    }
     zones[z].active = false;
     digitalWrite(zones[z].relayPin, LOW);
     if (activeZone == z) activeZone = -1;
@@ -418,7 +430,7 @@ void checkButton() {
                 stopAll();
             } else {
                 // Start the next zone in rotation
-                startZone(buttonZoneIndex);
+                startZone(buttonZoneIndex, "button");
                 buttonZoneIndex = (buttonZoneIndex + 1) % NUM_ZONES;
             }
         }
@@ -453,7 +465,7 @@ void checkSchedules() {
                     if (activeZone >= 0) {
                         enqueueZone(z);
                     } else {
-                        startZone(z);
+                        startZone(z, "schedule");
                     }
                 }
             } else {
@@ -687,6 +699,65 @@ String getDevicesJson() {
     String out;
     serializeJson(doc, out);
     return out;
+}
+
+// ════════════════════════════════════════════
+// Run log (ring buffer)
+// ════════════════════════════════════════════
+
+void logRun(int zone, const char* trigger, int durationSec) {
+    struct tm timeinfo;
+    char timeBuf[24] = "unknown";
+    if (getLocalTime(&timeinfo, 0)) {
+        strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    }
+
+    JsonDocument doc;
+    doc["t"] = timeBuf;
+    doc["z"] = zone;
+    doc["name"] = zones[zone].name;
+    doc["trigger"] = trigger;
+    doc["sec"] = durationSec;
+
+    String line;
+    serializeJson(doc, line);
+    line += "\n";
+
+    File f = LittleFS.open(LOG_FILE, "a");
+    if (f) {
+        f.print(line);
+        f.close();
+    }
+
+    // Trim if over budget
+    trimLog();
+}
+
+void trimLog() {
+    File f = LittleFS.open(LOG_FILE, "r");
+    if (!f) return;
+    size_t sz = f.size();
+    if (sz <= LOG_MAX_BYTES) {
+        f.close();
+        return;
+    }
+
+    // Read entire file, drop first half of lines
+    String content = f.readString();
+    f.close();
+
+    int cutTarget = content.length() / 2;
+    int cutAt = content.indexOf('\n', cutTarget);
+    if (cutAt < 0) cutAt = cutTarget;
+
+    String trimmed = content.substring(cutAt + 1);
+
+    File out = LittleFS.open(LOG_FILE, "w");
+    if (out) {
+        out.print(trimmed);
+        out.close();
+        Serial.printf("[Log] Trimmed from %d to %d bytes\n", sz, trimmed.length());
+    }
 }
 
 // ════════════════════════════════════════════
@@ -1103,6 +1174,22 @@ void setupNormalRoutes() {
         req->send(200, "application/json", getDevicesJson());
     });
 
+    // API: run log (read-only, no PIN)
+    server.on("/api/log", HTTP_GET, [](AsyncWebServerRequest *req) {
+        if (LittleFS.exists(LOG_FILE)) {
+            req->send(LittleFS, LOG_FILE, "application/x-ndjson");
+        } else {
+            req->send(200, "application/x-ndjson", "");
+        }
+    });
+
+    // API: clear run log (PIN protected)
+    server.on("/api/log/clear", HTTP_POST, [](AsyncWebServerRequest *req) {
+        if (!checkPinHeader(req)) return;
+        LittleFS.remove(LOG_FILE);
+        req->send(200, "application/json", "{\"ok\":true}");
+    });
+
     // API: start a zone (PIN protected)
     // POST /api/zone/start with body {"zone": 0}
     server.on("/api/zone/start", HTTP_POST, [](AsyncWebServerRequest *req) {},
@@ -1159,7 +1246,7 @@ void setupNormalRoutes() {
         if (!checkPin(req, doc)) return;
         for (int i = 0; i < NUM_ZONES; i++) {
             if (activeZone < 0 && !zones[i].active) {
-                startZone(i);
+                startZone(i, "run-all");
             } else {
                 enqueueZone(i);
             }
