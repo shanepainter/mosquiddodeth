@@ -311,6 +311,49 @@ body {
 </div>
 
 <div class="card">
+  <h2>Timezone</h2>
+  <div class="field-row">
+    <select id="tz-select" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:0.9em">
+      <option value="-36000">Hawaii (UTC-10)</option>
+      <option value="-32400">Alaska (UTC-9)</option>
+      <option value="-28800">Pacific (UTC-8)</option>
+      <option value="-25200">Mountain (UTC-7)</option>
+      <option value="-21600">Central (UTC-6)</option>
+      <option value="-18000">Eastern (UTC-5)</option>
+      <option value="-14400">Atlantic (UTC-4)</option>
+      <option value="0">UTC</option>
+      <option value="3600">CET (UTC+1)</option>
+      <option value="7200">EET (UTC+2)</option>
+      <option value="10800">Moscow (UTC+3)</option>
+      <option value="19800">IST (UTC+5:30)</option>
+      <option value="28800">CST/AWST (UTC+8)</option>
+      <option value="32400">JST/KST (UTC+9)</option>
+      <option value="36000">AEST (UTC+10)</option>
+    </select>
+    <label style="white-space:nowrap;margin:0"><input type="checkbox" id="dst-check"> DST</label>
+    <button class="btn btn-sm btn-outline" onclick="saveTz()">Save</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Rain Delay</h2>
+  <div id="rain-status" style="font-size:0.9em;margin-bottom:10px;color:var(--muted)">--</div>
+  <div class="field-row">
+    <label style="white-space:nowrap;margin:0"><input type="checkbox" id="rain-check"> Auto-check weather</label>
+  </div>
+  <div class="field-row" style="margin-top:8px">
+    <input type="number" id="geo-lat" step="0.0001" placeholder="Latitude" style="width:110px;text-align:left">
+    <input type="number" id="geo-lon" step="0.0001" placeholder="Longitude" style="width:110px;text-align:left">
+    <button class="btn btn-sm btn-outline" onclick="saveRain()">Save</button>
+  </div>
+  <div class="field-row" style="margin-top:8px">
+    <button class="btn btn-sm btn-outline" onclick="pauseRain(24)">Pause 24h</button>
+    <button class="btn btn-sm btn-outline" onclick="pauseRain(48)">Pause 48h</button>
+    <button class="btn btn-sm btn-outline" onclick="pauseRain(0)">Resume</button>
+  </div>
+</div>
+
+<div class="card">
   <h2>PIN Lock</h2>
   <div id="pin-status" style="font-size:0.9em;margin-bottom:10px;color:var(--muted)">--</div>
   <div class="field-row">
@@ -417,6 +460,32 @@ function updateUI(d) {
 
   // Time
   document.getElementById('device-time').textContent = d.time || '--';
+
+  // Timezone
+  const tzSelect = document.getElementById('tz-select');
+  if (document.activeElement !== tzSelect) tzSelect.value = String(d.tz_offset || -18000);
+  document.getElementById('dst-check').checked = (d.tz_dst || 0) > 0;
+
+  // Rain
+  document.getElementById('rain-check').checked = d.rain_check || false;
+  const geoLatInput = document.getElementById('geo-lat');
+  const geoLonInput = document.getElementById('geo-lon');
+  if (document.activeElement !== geoLatInput && d.geo_lat) geoLatInput.value = d.geo_lat;
+  if (document.activeElement !== geoLonInput && d.geo_lon) geoLonInput.value = d.geo_lon;
+  const rainStatusEl = document.getElementById('rain-status');
+  if (d.rain_paused) {
+    rainStatusEl.textContent = 'Manually paused';
+    rainStatusEl.style.color = 'var(--orange)';
+  } else if (d.rain_skip) {
+    rainStatusEl.textContent = 'Rain detected — schedules skipping';
+    rainStatusEl.style.color = 'var(--blue)';
+  } else if (d.rain_check) {
+    rainStatusEl.textContent = 'Weather check active — no rain';
+    rainStatusEl.style.color = 'var(--green)';
+  } else {
+    rainStatusEl.textContent = 'Weather check disabled';
+    rainStatusEl.style.color = 'var(--muted)';
+  }
 
   // PIN
   const pinStatusEl = document.getElementById('pin-status');
@@ -622,6 +691,23 @@ async function setPin() {
   if (v.length !== 4 || !/^\d{4}$/.test(v)) { alert('PIN must be exactly 4 digits'); return; }
   const result = await api('/config', { new_pin: v });
   if (result) { sessionPin = v; sessionStorage.setItem('pin', v); document.getElementById('pin-input').value = ''; }
+}
+
+async function saveTz() {
+  const offset = parseInt(document.getElementById('tz-select').value);
+  const dst = document.getElementById('dst-check').checked ? 3600 : 0;
+  await api('/config', { tz_offset: offset, tz_dst: dst });
+}
+
+async function saveRain() {
+  const lat = parseFloat(document.getElementById('geo-lat').value) || 0;
+  const lon = parseFloat(document.getElementById('geo-lon').value) || 0;
+  const check = document.getElementById('rain-check').checked;
+  await api('/config', { geo_lat: lat, geo_lon: lon, rain_check: check });
+}
+
+async function pauseRain(hours) {
+  await api('/config', { rain_pause_hours: hours });
 }
 
 async function clearPin() {

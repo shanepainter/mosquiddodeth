@@ -8,11 +8,12 @@
 #include <LittleFS.h>
 #include <ESPmDNS.h>
 #include <Update.h>
+#include <HTTPClient.h>
 #include <esp_task_wdt.h>
 #include <time.h>
 #include "config.h"
 
-#define FW_VERSION "1.1.0"
+#define FW_VERSION "1.2.0"
 
 // ── Run log (ring buffer on flash) ──
 #define LOG_FILE "/runlog.jsonl"
@@ -35,6 +36,17 @@ String friendlyName;
 
 // ── PIN protection ──
 String pin;
+
+// ── Timezone ──
+long tzOffset = TZ_OFFSET;   // seconds from UTC, persisted in config
+int tzDst = TZ_DST;          // DST offset in seconds
+
+// ── Rain delay ──
+float geoLat = 0;
+float geoLon = 0;
+bool rainCheckEnabled = false;
+unsigned long rainPauseUntil = 0;  // millis() timestamp, 0 = not paused
+bool lastRainSkip = false;         // true if last schedule check was skipped due to rain
 
 // ── Zone ──
 struct ScheduleEntry {
@@ -123,6 +135,8 @@ void checkWifiReconnect();
 void setupOTARoute();
 void logRun(int zone, const char* trigger, int durationSec);
 void trimLog();
+bool checkRainDelay();
+void applyTimezone();
 
 // ════════════════════════════════════════════
 // Queue operations
@@ -280,9 +294,8 @@ void setup() {
         return;
     }
 
-    // NTP
-    configTime(TZ_OFFSET, TZ_DST, NTP_SERVER);
-    Serial.println("[NTP] Time sync requested");
+    // NTP — use stored timezone
+    applyTimezone();
 
     // mDNS
     if (MDNS.begin(hostname.c_str())) {
@@ -461,6 +474,12 @@ void checkSchedules() {
             if (dayMatch && timeMatch) {
                 if (!zones[z].lastScheduleFired[s]) {
                     zones[z].lastScheduleFired[s] = true;
+                    // Rain check before scheduled spray
+                    if (checkRainDelay()) {
+                        Serial.printf("[Schedule] Zone %d, entry %d skipped (rain)\n", z, s);
+                        logRun(z, "rain-skip", 0);
+                        continue;
+                    }
                     Serial.printf("[Schedule] Zone %d, entry %d firing\n", z, s);
                     if (activeZone >= 0) {
                         enqueueZone(z);
@@ -496,6 +515,11 @@ void loadConfig() {
 
     friendlyName = doc["friendly_name"] | "";
     pin = doc["pin"] | "";
+    tzOffset = doc["tz_offset"] | (long)TZ_OFFSET;
+    tzDst = doc["tz_dst"] | (int)TZ_DST;
+    geoLat = doc["geo_lat"] | 0.0f;
+    geoLon = doc["geo_lon"] | 0.0f;
+    rainCheckEnabled = doc["rain_check"] | false;
 
     JsonArray zarr = doc["zones"].as<JsonArray>();
     int i = 0;
@@ -527,6 +551,11 @@ void saveConfig() {
     JsonDocument doc;
     doc["friendly_name"] = friendlyName;
     doc["pin"] = pin;
+    doc["tz_offset"] = tzOffset;
+    doc["tz_dst"] = tzDst;
+    doc["geo_lat"] = geoLat;
+    doc["geo_lon"] = geoLon;
+    doc["rain_check"] = rainCheckEnabled;
 
     JsonArray zarr = doc["zones"].to<JsonArray>();
     for (int i = 0; i < NUM_ZONES; i++) {
@@ -565,6 +594,13 @@ String getStatusJson() {
     doc["friendly_name"] = friendlyName;
     doc["pin_enabled"] = pin.length() > 0;
     doc["version"] = FW_VERSION;
+    doc["tz_offset"] = tzOffset;
+    doc["tz_dst"] = tzDst;
+    doc["geo_lat"] = geoLat;
+    doc["geo_lon"] = geoLon;
+    doc["rain_check"] = rainCheckEnabled;
+    doc["rain_paused"] = (rainPauseUntil > 0 && millis() < rainPauseUntil);
+    doc["rain_skip"] = lastRainSkip;
     doc["ip"] = WiFi.localIP().toString();
     doc["uptime"] = millis() / 1000;
     doc["wifi_rssi"] = WiFi.RSSI();
@@ -699,6 +735,94 @@ String getDevicesJson() {
     String out;
     serializeJson(doc, out);
     return out;
+}
+
+// ════════════════════════════════════════════
+// Timezone
+// ════════════════════════════════════════════
+
+void applyTimezone() {
+    configTime(tzOffset, tzDst, NTP_SERVER);
+    Serial.printf("[NTP] Timezone applied: UTC%+ld, DST=%d\n", tzOffset / 3600, tzDst / 3600);
+}
+
+// ════════════════════════════════════════════
+// Rain delay
+// ════════════════════════════════════════════
+
+// Returns true if spraying should be skipped
+bool checkRainDelay() {
+    // Manual pause active?
+    if (rainPauseUntil > 0 && millis() < rainPauseUntil) {
+        return true;
+    }
+    rainPauseUntil = 0;  // expired
+
+    // Auto weather check disabled or no coordinates?
+    if (!rainCheckEnabled || (geoLat == 0 && geoLon == 0)) {
+        lastRainSkip = false;
+        return false;
+    }
+
+    // Check Open-Meteo API — current conditions + 6-hour forecast
+    HTTPClient http;
+    char url[320];
+    snprintf(url, sizeof(url),
+        "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
+        "&current=precipitation,rain"
+        "&hourly=precipitation_probability,rain"
+        "&forecast_hours=6",
+        geoLat, geoLon);
+
+    http.begin(url);
+    http.setTimeout(5000);
+    int code = http.GET();
+
+    if (code != 200) {
+        http.end();
+        Serial.printf("[Rain] API error %d — spraying anyway (fail-open)\n", code);
+        lastRainSkip = false;
+        return false;  // fail-open: spray if API is down
+    }
+
+    String body = http.getString();
+    http.end();
+
+    JsonDocument doc;
+    if (deserializeJson(doc, body)) {
+        Serial.println("[Rain] JSON parse error — spraying anyway");
+        lastRainSkip = false;
+        return false;
+    }
+
+    // Check current rain
+    float precip = doc["current"]["precipitation"] | 0.0f;
+    float rain = doc["current"]["rain"] | 0.0f;
+
+    if (precip > 0 || rain > 0) {
+        Serial.printf("[Rain] Currently raining (%.1fmm) — skipping\n", precip);
+        lastRainSkip = true;
+        return true;
+    }
+
+    // Check if rain is predicted in next 6 hours (>50% probability or >0.5mm forecast)
+    JsonArray probArr = doc["hourly"]["precipitation_probability"].as<JsonArray>();
+    JsonArray rainArr = doc["hourly"]["rain"].as<JsonArray>();
+
+    for (size_t i = 0; i < probArr.size() && i < 6; i++) {
+        int prob = probArr[i] | 0;
+        float hr_rain = rainArr[i] | 0.0f;
+        if (prob > 50 || hr_rain > 0.5) {
+            Serial.printf("[Rain] Rain forecast in ~%dh (%d%%, %.1fmm) — skipping\n",
+                          (int)i + 1, prob, hr_rain);
+            lastRainSkip = true;
+            return true;
+        }
+    }
+
+    Serial.println("[Rain] No rain current or forecast — spray OK");
+    lastRainSkip = false;
+    return false;
 }
 
 // ════════════════════════════════════════════
@@ -1272,6 +1396,24 @@ void setupNormalRoutes() {
             if (newPin.isEmpty() || newPin.length() == 4) {
                 pin = newPin;
             }
+        }
+        // Timezone
+        if (doc["tz_offset"].is<long>()) {
+            tzOffset = doc["tz_offset"].as<long>();
+            applyTimezone();
+        }
+        if (doc["tz_dst"].is<int>()) {
+            tzDst = doc["tz_dst"].as<int>();
+            applyTimezone();
+        }
+        // Rain / geo
+        if (doc["geo_lat"].is<float>()) geoLat = doc["geo_lat"].as<float>();
+        if (doc["geo_lon"].is<float>()) geoLon = doc["geo_lon"].as<float>();
+        if (doc["rain_check"].is<bool>()) rainCheckEnabled = doc["rain_check"].as<bool>();
+        // Manual pause: {"rain_pause_hours": 24} or 0 to clear
+        if (doc["rain_pause_hours"].is<int>()) {
+            int h = doc["rain_pause_hours"].as<int>();
+            rainPauseUntil = (h > 0) ? millis() + (unsigned long)h * 3600000UL : 0;
         }
         saveConfig();
         req->send(200, "application/json", getStatusJson());
