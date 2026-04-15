@@ -1,12 +1,12 @@
 <mxfile host="app.diagrams.net" modified="2026-04-14" agent="Claude" version="24.0.0" type="device">
-  <diagram id="wiring" name="MosquittoDeth Wiring — Multi-Zone">
+  <diagram id="wiring" name="MosquiddoDeth Wiring — Multi-Zone">
     <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
         <!-- Title -->
-        <mxCell id="title" value="&lt;b&gt;MOSQUITTODETH — Multi-Zone Wiring Diagram&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;" vertex="1" parent="1">
+        <mxCell id="title" value="&lt;b&gt;MOSQUIDDODETH — Multi-Zone Wiring Diagram&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;" vertex="1" parent="1">
           <mxGeometry x="500" y="20" width="600" height="40" as="geometry" />
         </mxCell>
         <mxCell id="subtitle" value="4 zones, sequential operation (one relay active at a time)" style="text;html=1;align=center;fontSize=12;fontColor=#8b949e;" vertex="1" parent="1">

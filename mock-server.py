@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mock ESP32 server for testing the MosquittoDeth web UI."""
+"""Mock ESP32 server for testing the MosquiddoDeth web UI."""
 
 import json
 import time
@@ -13,7 +13,7 @@ PORT = 8080
 # ── Fake device state ──
 state = {
     "device_id": "a1b2",
-    "hostname": "mosquitto-death-a1b2",
+    "hostname": "mosquiddo-deth-a1b2",
     "friendly_name": "",
     "pin": "",
     "active_zone": -1,
@@ -111,7 +111,7 @@ class Handler(SimpleHTTPRequestHandler):
                 {"id": state["device_id"], "hostname": state["hostname"],
                  "name": state["friendly_name"], "ip": "192.168.1.100",
                  "active": state["active_zone"] >= 0, "self": True},
-                {"id": "c3d4", "hostname": "mosquitto-death-c3d4",
+                {"id": "c3d4", "hostname": "mosquiddo-deth-c3d4",
                  "name": "Neighbor's Yard", "ip": "192.168.1.101",
                  "active": False, "self": False},
             ]})

@@ -141,7 +141,7 @@ void setup() {
     deviceId = String(idBuf);
     hostname = String(MDNS_HOSTNAME) + "-" + deviceId;
 
-    Serial.printf("\n[MosquittoDeth] Device %s starting...\n", hostname.c_str());
+    Serial.printf("\n[MosquiddoDeth] Device %s starting...\n", hostname.c_str());
 
     // GPIO — init all zone relay pins
     for (int i = 0; i < NUM_ZONES; i++) {

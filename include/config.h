@@ -27,5 +27,5 @@ const char* ZONE_DEFAULT_NAMES[NUM_ZONES] = {
 #define TZ_DST 3600         // DST offset in seconds (0 if no DST)
 
 // ── mDNS ──
-#define MDNS_HOSTNAME "mosquitto-death"
-// Each device appends last 4 hex of MAC: http://mosquitto-death-a1b2.local
+#define MDNS_HOSTNAME "mosquiddo-deth"
+// Each device appends last 4 hex of MAC: http://mosquiddo-deth-a1b2.local
