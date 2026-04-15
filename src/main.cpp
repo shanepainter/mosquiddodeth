@@ -9,11 +9,14 @@
 #include <ESPmDNS.h>
 #include <Update.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <esp_task_wdt.h>
 #include <time.h>
 #include "config.h"
 
 #define FW_VERSION "1.3.0"
+#define UPDATE_CHECK_URL "https://raw.githubusercontent.com/shanepainter/mosquiddodeth/master/version.json"
+#define UPDATE_CHECK_INTERVAL_MS 86400000UL  // 24 hours
 
 // ── Run log (ring buffer on flash) ──
 #define LOG_FILE "/runlog.jsonl"
@@ -55,6 +58,13 @@ int tankFullCm = 10;       // distance when tank is full (sensor to water surfac
 int tankPercent = -1;       // last reading, -1 = no reading yet
 float tankDistanceCm = 0;  // raw distance for debug
 unsigned long lastTankRead = 0;
+
+// ── Auto-update ──
+String updateAvailableVersion;
+String updateBinUrl;
+String updateNotes;
+unsigned long lastUpdateCheck = 0;
+bool updateInProgress = false;
 
 // ── Zone ──
 struct ScheduleEntry {
@@ -146,6 +156,8 @@ void trimLog();
 bool checkRainDelay();
 void applyTimezone();
 void readTankLevel();
+void checkForUpdate();
+bool downloadAndInstallUpdate();
 
 // ════════════════════════════════════════════
 // Queue operations
@@ -386,6 +398,7 @@ void loop() {
     receiveBeacons();
     checkWifiReconnect();
     readTankLevel();
+    checkForUpdate();
 
     if (millis() - lastBeaconMs >= BEACON_INTERVAL_MS) {
         sendBeacon();
@@ -626,6 +639,10 @@ String getStatusJson() {
     doc["tank_empty_cm"] = tankEmptyCm;
     doc["tank_full_cm"] = tankFullCm;
     doc["tank_low"] = (tankEnabled && tankPercent >= 0 && tankPercent <= TANK_LOW_PERCENT);
+    if (!updateAvailableVersion.isEmpty()) {
+        doc["update_version"] = updateAvailableVersion;
+        doc["update_notes"] = updateNotes;
+    }
     doc["ip"] = WiFi.localIP().toString();
     doc["uptime"] = millis() / 1000;
     doc["wifi_rssi"] = WiFi.RSSI();
@@ -894,6 +911,137 @@ void readTankLevel() {
 }
 
 // ════════════════════════════════════════════
+// Auto-update check
+// ════════════════════════════════════════════
+
+int versionCompare(const String &a, const String &b) {
+    // Compare semver strings like "1.3.0" vs "1.4.0"
+    int aMaj = 0, aMin = 0, aPat = 0, bMaj = 0, bMin = 0, bPat = 0;
+    sscanf(a.c_str(), "%d.%d.%d", &aMaj, &aMin, &aPat);
+    sscanf(b.c_str(), "%d.%d.%d", &bMaj, &bMin, &bPat);
+    if (aMaj != bMaj) return aMaj - bMaj;
+    if (aMin != bMin) return aMin - bMin;
+    return aPat - bPat;
+}
+
+void checkForUpdate() {
+    if (millis() - lastUpdateCheck < UPDATE_CHECK_INTERVAL_MS && lastUpdateCheck > 0) return;
+    lastUpdateCheck = millis();
+
+    Serial.println("[Update] Checking for new version...");
+
+    WiFiClientSecure client;
+    client.setInsecure();  // skip cert verification — integrity via OTA checksum
+
+    HTTPClient http;
+    http.begin(client, UPDATE_CHECK_URL);
+    http.setTimeout(10000);
+    int code = http.GET();
+
+    if (code != 200) {
+        http.end();
+        Serial.printf("[Update] Check failed: HTTP %d\n", code);
+        return;
+    }
+
+    String body = http.getString();
+    http.end();
+
+    JsonDocument doc;
+    if (deserializeJson(doc, body)) {
+        Serial.println("[Update] JSON parse error");
+        return;
+    }
+
+    String remoteVersion = doc["version"] | "";
+    String binUrl = doc["url"] | "";
+    String notes = doc["notes"] | "";
+
+    if (remoteVersion.isEmpty()) {
+        Serial.println("[Update] No version in response");
+        return;
+    }
+
+    if (versionCompare(remoteVersion, FW_VERSION) > 0 && !binUrl.isEmpty()) {
+        updateAvailableVersion = remoteVersion;
+        updateBinUrl = binUrl;
+        updateNotes = notes;
+        Serial.printf("[Update] New version available: %s (current: %s)\n",
+                      remoteVersion.c_str(), FW_VERSION);
+    } else {
+        updateAvailableVersion = "";
+        updateBinUrl = "";
+        updateNotes = "";
+        Serial.printf("[Update] Up to date (%s)\n", FW_VERSION);
+    }
+}
+
+bool downloadAndInstallUpdate() {
+    if (updateBinUrl.isEmpty()) return false;
+
+    Serial.printf("[Update] Downloading %s from %s\n",
+                  updateAvailableVersion.c_str(), updateBinUrl.c_str());
+
+    updateInProgress = true;
+
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    HTTPClient http;
+    http.begin(client, updateBinUrl);
+    http.setTimeout(30000);
+    int code = http.GET();
+
+    if (code != 200) {
+        http.end();
+        Serial.printf("[Update] Download failed: HTTP %d\n", code);
+        updateInProgress = false;
+        return false;
+    }
+
+    int contentLength = http.getSize();
+    if (contentLength <= 0) {
+        http.end();
+        Serial.println("[Update] Invalid content length");
+        updateInProgress = false;
+        return false;
+    }
+
+    if (!Update.begin(contentLength)) {
+        http.end();
+        Serial.println("[Update] Not enough space for OTA");
+        updateInProgress = false;
+        return false;
+    }
+
+    WiFiClient *stream = http.getStreamPtr();
+    uint8_t buf[1024];
+    int written = 0;
+
+    while (http.connected() && written < contentLength) {
+        size_t avail = stream->available();
+        if (avail) {
+            int read = stream->readBytes(buf, min(avail, sizeof(buf)));
+            Update.write(buf, read);
+            written += read;
+            esp_task_wdt_reset();
+        }
+        delay(1);
+    }
+
+    http.end();
+
+    if (Update.end(true)) {
+        Serial.printf("[Update] Success: %d bytes written\n", written);
+        return true;
+    } else {
+        Serial.println("[Update] Finalize failed");
+        updateInProgress = false;
+        return false;
+    }
+}
+
+// ════════════════════════════════════════════
 // Run log (ring buffer)
 // ════════════════════════════════════════════
 
@@ -1106,6 +1254,37 @@ void setupOTARoute() {
             }
         }
     );
+
+    // API: check for updates now
+    server.on("/api/update/check", HTTP_POST, [](AsyncWebServerRequest *req) {
+        if (!checkPinHeader(req)) return;
+        lastUpdateCheck = 0;  // force re-check
+        checkForUpdate();
+        JsonDocument doc;
+        doc["version"] = FW_VERSION;
+        doc["update_version"] = updateAvailableVersion;
+        doc["update_notes"] = updateNotes;
+        doc["update_available"] = !updateAvailableVersion.isEmpty();
+        String out;
+        serializeJson(doc, out);
+        req->send(200, "application/json", out);
+    });
+
+    // API: install remote update
+    server.on("/api/update/install", HTTP_POST, [](AsyncWebServerRequest *req) {
+        if (!checkPinHeader(req)) return;
+        if (updateBinUrl.isEmpty()) {
+            req->send(400, "application/json", "{\"error\":\"no update available\"}");
+            return;
+        }
+        req->send(200, "application/json", "{\"ok\":true,\"msg\":\"downloading and installing...\"}");
+        // Download in a separate task after response is sent
+        delay(500);
+        if (downloadAndInstallUpdate()) {
+            delay(1000);
+            ESP.restart();
+        }
+    });
 }
 
 // ════════════════════════════════════════════

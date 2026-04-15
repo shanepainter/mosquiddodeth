@@ -414,6 +414,8 @@ body {
   <div id="devices-container"></div>
 </div>
 
+<div id="update-banner" style="display:none;text-align:center;background:var(--card);border:1px solid var(--green);border-radius:10px;padding:12px;margin-top:12px;font-size:0.85em;color:var(--text)"></div>
+
 <div class="meta" id="uptime"></div>
 
 <script>
@@ -554,7 +556,15 @@ function updateUI(d) {
     const h = Math.floor(d.uptime / 3600);
     const m = Math.floor((d.uptime % 3600) / 60);
     document.getElementById('uptime').innerHTML = `${d.hostname || ''} · ${d.ip || ''} · Uptime: ${h}h ${m}m` +
-      (d.version ? ` · v${d.version} · <a href="/update" style="color:var(--blue)">Update</a>` : '');
+      (d.version ? ` · v${d.version}` : '');
+    // Update notification
+    const updateEl = document.getElementById('update-banner');
+    if (d.update_version) {
+      updateEl.style.display = 'block';
+      updateEl.innerHTML = `v${d.update_version} available${d.update_notes ? ' — ' + d.update_notes : ''} · <a href="#" onclick="installUpdate();return false" style="color:var(--green);font-weight:700">Install</a> · <a href="/update" style="color:var(--blue)">Manual</a>`;
+    } else {
+      updateEl.style.display = 'none';
+    }
   }
 
   renderZoneTabs(d.zones);
@@ -836,6 +846,31 @@ function renderDevices(devices) {
     a.appendChild(status);
     container.appendChild(a);
   });
+}
+
+async function checkUpdate() {
+  const headers = {'Content-Type':'application/json'};
+  if (sessionPin) headers['X-Pin'] = sessionPin;
+  try {
+    const r = await fetch('/api/update/check', { method: 'POST', headers });
+    const d = await r.json();
+    if (d.update_available) {
+      alert('Update available: v' + d.update_version + (d.update_notes ? '\n' + d.update_notes : ''));
+    } else {
+      alert('Up to date (v' + d.version + ')');
+    }
+  } catch(e) { alert('Check failed: ' + e.message); }
+}
+
+async function installUpdate() {
+  if (!confirm('Download and install update? Device will reboot.')) return;
+  const headers = {};
+  if (sessionPin) headers['X-Pin'] = sessionPin;
+  try {
+    await fetch('/api/update/install', { method: 'POST', headers });
+    document.getElementById('update-banner').innerHTML = 'Downloading and installing... do not power off.';
+    setTimeout(() => window.location.reload(), 30000);
+  } catch(e) { alert('Install failed: ' + e.message); }
 }
 
 async function loadLog() {

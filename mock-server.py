@@ -40,6 +40,8 @@ state = {
     "tank_full_cm": 10,
     "tank_percent": 62,
     "tank_distance_cm": 44.2,
+    "update_version": "1.4.0",
+    "update_notes": "Simulated update for testing",
     "zones": [
         {"name": "Front Yard", "seconds": 90, "active": False, "start": 0, "pin": 26, "queued": False, "trigger": "", "schedules": [
             {"enabled": True, "days": 0b0100100, "hour": 6, "minute": 0}
@@ -128,6 +130,8 @@ def status_json():
             "tank_empty_cm": state["tank_empty_cm"],
             "tank_full_cm": state["tank_full_cm"],
             "tank_low": state["tank_enabled"] and state["tank_percent"] <= 15,
+            "update_version": state.get("update_version", ""),
+            "update_notes": state.get("update_notes", ""),
             "zones": [],
         }
         for z in state["zones"]:
@@ -382,6 +386,18 @@ class Handler(SimpleHTTPRequestHandler):
                 LOG_FILE.unlink()
             print("[Log] Cleared")
             self.json_response({"ok": True})
+
+        elif self.path == "/api/update/check":
+            self.json_response({
+                "version": "1.3.0",
+                "update_version": state.get("update_version", ""),
+                "update_notes": state.get("update_notes", ""),
+                "update_available": bool(state.get("update_version")),
+            })
+
+        elif self.path == "/api/update/install":
+            print("[Update] Mock install triggered — would download and reboot")
+            self.json_response({"ok": True, "msg": "mock install"})
 
         elif self.path == "/api/ota":
             print("[OTA] Mock upload received (no actual update)")
