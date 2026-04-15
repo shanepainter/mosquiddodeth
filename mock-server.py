@@ -370,7 +370,7 @@ class Handler(SimpleHTTPRequestHandler):
             print("[OTA] Mock upload received (no actual update)")
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
-            body = b"OK — mock reboot"
+            body = b"OK - mock reboot"
             self.send_header("Content-Length", len(body))
             self.end_headers()
             self.wfile.write(body)
