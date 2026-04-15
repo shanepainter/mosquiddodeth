@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Mosquitto Death">
+<meta name="apple-mobile-web-app-title" content="MosquittoDeth">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="/icon-512.png">
-<title>Mosquitto Death</title>
+<title>MosquittoDeth</title>
 <style>
 :root {
   --bg: #0d1117;
@@ -264,7 +264,7 @@ h1 span { color: var(--red); }
 </style>
 </head>
 <body>
-<h1>Mosquitto <span>Death</span></h1>
+<h1>Mosquitto<span>Deth</span></h1>
 <div class="device-name" id="device-name"></div>
 
 <div class="card" id="status-card">
@@ -366,7 +366,7 @@ function updateUI(d) {
   const label = d.friendly_name || d.hostname || '';
   const sub = d.friendly_name ? `${d.hostname}.local` : '';
   nameEl.textContent = sub ? `${label} (${sub})` : `${label}.local`;
-  document.title = (d.friendly_name || 'Mosquitto Death');
+  document.title = (d.friendly_name || 'MosquittoDeth');
 
   // Name input
   const nameInput = document.getElementById('name-input');

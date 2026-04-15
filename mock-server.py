@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mock ESP32 server for testing the Mosquitto Death web UI."""
+"""Mock ESP32 server for testing the MosquittoDeth web UI."""
 
 import json
 import time
