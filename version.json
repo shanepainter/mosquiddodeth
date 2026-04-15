@@ -1,5 +1,5 @@
 {
   "version": "1.3.0",
-  "url": "",
-  "notes": "Tank level sensor support"
+  "url": "https://mosquiddodeth-ota.vercel.app/firmware.bin",
+  "notes": "Auto-update, tank sensor, rain delay, timezone"
 }

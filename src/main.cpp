@@ -15,7 +15,7 @@
 #include "config.h"
 
 #define FW_VERSION "1.3.0"
-#define UPDATE_CHECK_URL "https://raw.githubusercontent.com/shanepainter/mosquiddodeth/master/version.json"
+#define UPDATE_CHECK_URL "https://mosquiddodeth-ota.vercel.app/version.json"
 #define UPDATE_CHECK_INTERVAL_MS 86400000UL  // 24 hours
 
 // ── Run log (ring buffer on flash) ──
