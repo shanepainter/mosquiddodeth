@@ -7,13 +7,22 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <ESPmDNS.h>
+#include <Update.h>
+#include <esp_task_wdt.h>
 #include <time.h>
 #include "config.h"
+
+#define FW_VERSION "1.0.0"
 
 // ── State ──
 AsyncWebServer server(80);
 DNSServer dnsServer;
 bool setupMode = false;
+
+// ── WiFi reconnect ──
+unsigned long lastWifiCheck = 0;
+#define WIFI_CHECK_INTERVAL_MS 30000
+#define WIFI_RECONNECT_TIMEOUT_MS 15000
 
 // ── Device identity ──
 String deviceId;
@@ -105,6 +114,8 @@ void sendBeacon();
 void receiveBeacons();
 bool checkPin(AsyncWebServerRequest *req, const JsonDocument &doc);
 bool checkPinHeader(AsyncWebServerRequest *req);
+void checkWifiReconnect();
+void setupOTARoute();
 
 // ════════════════════════════════════════════
 // Queue operations
@@ -281,6 +292,16 @@ void setup() {
     setupNormalRoutes();
     server.begin();
     Serial.printf("[HTTP] Server started — %d zones configured\n", NUM_ZONES);
+
+    // Watchdog — reboot if loop() doesn't feed within 30s
+    esp_task_wdt_config_t wdt_config = {
+        .timeout_ms = 30000,
+        .idle_core_mask = 0,
+        .trigger_panic = true,
+    };
+    esp_task_wdt_reconfigure(&wdt_config);
+    esp_task_wdt_add(NULL);
+    Serial.println("[WDT] Watchdog enabled (30s)");
 }
 
 // ════════════════════════════════════════════
@@ -331,11 +352,13 @@ void loop() {
     checkButton();
     checkSchedules();
     receiveBeacons();
+    checkWifiReconnect();
 
     if (millis() - lastBeaconMs >= BEACON_INTERVAL_MS) {
         sendBeacon();
     }
 
+    esp_task_wdt_reset();
     delay(100);
 }
 
@@ -529,6 +552,7 @@ String getStatusJson() {
     doc["hostname"] = hostname;
     doc["friendly_name"] = friendlyName;
     doc["pin_enabled"] = pin.length() > 0;
+    doc["version"] = FW_VERSION;
     doc["ip"] = WiFi.localIP().toString();
     doc["uptime"] = millis() / 1000;
     doc["wifi_rssi"] = WiFi.RSSI();
@@ -663,6 +687,162 @@ String getDevicesJson() {
     String out;
     serializeJson(doc, out);
     return out;
+}
+
+// ════════════════════════════════════════════
+// WiFi reconnect
+// ════════════════════════════════════════════
+
+void checkWifiReconnect() {
+    if (millis() - lastWifiCheck < WIFI_CHECK_INTERVAL_MS) return;
+    lastWifiCheck = millis();
+
+    if (WiFi.status() == WL_CONNECTED) return;
+
+    Serial.println("[WiFi] Connection lost — reconnecting...");
+    digitalWrite(LED_PIN, LOW);
+    WiFi.disconnect();
+    WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_RECONNECT_TIMEOUT_MS) {
+        esp_task_wdt_reset();  // feed watchdog during reconnect
+        delay(500);
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.printf("[WiFi] Reconnected: %s\n", WiFi.localIP().toString().c_str());
+        digitalWrite(LED_PIN, HIGH);
+        // Re-register mDNS
+        MDNS.end();
+        if (MDNS.begin(hostname.c_str())) {
+            MDNS.addService("http", "tcp", 80);
+        }
+    } else {
+        Serial.println("[WiFi] Reconnect failed — will retry next cycle");
+    }
+}
+
+// ════════════════════════════════════════════
+// OTA firmware update (web upload)
+// ════════════════════════════════════════════
+
+const char OTA_HTML[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MosquiddoDeth OTA Update</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:20px;max-width:420px;margin:0 auto}
+h1{font-size:1.2em;text-align:center;margin-bottom:20px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;margin-bottom:12px}
+label{display:block;color:#8b949e;font-size:.85em;margin-bottom:8px}
+input[type=file]{width:100%;padding:10px;border:1px solid #30363d;border-radius:8px;background:#0d1117;color:#e6edf3;margin-bottom:12px}
+.btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:1em;font-weight:700;cursor:pointer;background:#58a6ff;color:#000}
+.btn:disabled{opacity:.5}
+.progress{width:100%;height:8px;background:#30363d;border-radius:4px;margin:12px 0;overflow:hidden}
+.progress-bar{height:100%;background:#3fb950;width:0;transition:width .3s}
+.status{text-align:center;color:#8b949e;font-size:.9em;margin-top:8px}
+.warn{color:#d29922;font-size:.85em;margin-top:8px}
+a{color:#58a6ff}
+</style>
+</head><body>
+<h1>Firmware Update</h1>
+<div class="card">
+<label>Select firmware .bin file</label>
+<input type="file" id="file" accept=".bin">
+<div class="progress"><div class="progress-bar" id="bar"></div></div>
+<button class="btn" id="upload-btn" onclick="upload()">Upload &amp; Install</button>
+<div class="status" id="status"></div>
+<div class="warn">Device will reboot after update. Do not power off during upload.</div>
+</div>
+<p style="text-align:center;margin-top:16px"><a href="/">Back to control panel</a></p>
+<script>
+async function upload(){
+  const file=document.getElementById('file').files[0];
+  if(!file){document.getElementById('status').textContent='Select a file first';return}
+  const btn=document.getElementById('upload-btn');
+  btn.disabled=true;
+  document.getElementById('status').textContent='Uploading...';
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST','/api/ota');
+  xhr.upload.onprogress=(e)=>{
+    if(e.lengthComputable){
+      const pct=Math.round(e.loaded/e.total*100);
+      document.getElementById('bar').style.width=pct+'%';
+      document.getElementById('status').textContent='Uploading... '+pct+'%';
+    }
+  };
+  xhr.onload=()=>{
+    if(xhr.status===200){
+      document.getElementById('status').textContent='Success! Rebooting...';
+      document.getElementById('bar').style.width='100%';
+      setTimeout(()=>window.location.href='/',10000);
+    }else{
+      document.getElementById('status').textContent='Failed: '+xhr.responseText;
+      btn.disabled=false;
+    }
+  };
+  xhr.onerror=()=>{
+    document.getElementById('status').textContent='Upload error';
+    btn.disabled=false;
+  };
+  const form=new FormData();
+  form.append('firmware',file);
+  xhr.send(form);
+}
+</script>
+</body></html>
+)rawliteral";
+
+void setupOTARoute() {
+    server.on("/update", HTTP_GET, [](AsyncWebServerRequest *req) {
+        if (!checkPinHeader(req)) return;
+        req->send(200, "text/html", OTA_HTML);
+    });
+
+    server.on("/api/ota", HTTP_POST,
+        // Response handler (called after upload completes)
+        [](AsyncWebServerRequest *req) {
+            bool success = !Update.hasError();
+            req->send(success ? 200 : 500, "text/plain",
+                      success ? "OK — rebooting" : "Update failed");
+            if (success) {
+                delay(1000);
+                ESP.restart();
+            }
+        },
+        // File upload handler (called per chunk)
+        [](AsyncWebServerRequest *req, const String &filename, size_t index,
+           uint8_t *data, size_t len, bool final) {
+            // PIN check on first chunk
+            if (index == 0) {
+                if (!pin.isEmpty() && !(req->hasHeader("X-Pin") && req->header("X-Pin") == pin)) {
+                    // Can't send 403 mid-upload, just abort
+                    return;
+                }
+                Serial.printf("[OTA] Starting update: %s\n", filename.c_str());
+                if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+                    Serial.println("[OTA] Begin failed");
+                }
+            }
+            if (Update.isRunning()) {
+                if (Update.write(data, len) != len) {
+                    Serial.println("[OTA] Write failed");
+                }
+                esp_task_wdt_reset();  // feed watchdog during upload
+            }
+            if (final) {
+                if (Update.end(true)) {
+                    Serial.printf("[OTA] Update success: %u bytes\n", index + len);
+                } else {
+                    Serial.println("[OTA] End failed");
+                }
+            }
+        }
+    );
 }
 
 // ════════════════════════════════════════════
@@ -896,6 +1076,9 @@ void setupSetupRoutes() {
 // ════════════════════════════════════════════
 
 void setupNormalRoutes() {
+    // OTA update page
+    setupOTARoute();
+
     // Static assets
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
         req->send(LittleFS, "/index.html", "text/html");

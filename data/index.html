@@ -407,7 +407,8 @@ function updateUI(d) {
   if (d.uptime !== undefined) {
     const h = Math.floor(d.uptime / 3600);
     const m = Math.floor((d.uptime % 3600) / 60);
-    document.getElementById('uptime').textContent = `${d.hostname || ''} · ${d.ip || ''} · Uptime: ${h}h ${m}m`;
+    document.getElementById('uptime').innerHTML = `${d.hostname || ''} · ${d.ip || ''} · Uptime: ${h}h ${m}m` +
+      (d.version ? ` · v${d.version} · <a href="/update" style="color:var(--blue)">Update</a>` : '');
   }
 
   renderZoneTabs(d.zones);
