@@ -27,6 +27,12 @@ const char* ZONE_DEFAULT_NAMES[NUM_ZONES] = {
 #define MDNS_HOSTNAME "mosquiddo-deth"
 // Each device appends last 4 hex of MAC: http://mosquiddo-deth-a1b2.local
 
+// ── Tank level sensor (JSN-SR04T) ──
+#define TANK_TRIG_PIN 14    // GPIO for trigger
+#define TANK_ECHO_PIN 12    // GPIO for echo
+#define TANK_READ_INTERVAL_MS 60000  // read every 60s
+#define TANK_LOW_PERCENT 15          // alert threshold
+
 // ── Setup AP ──
 #define SETUP_AP_PREFIX "MosquiddoDeth-Setup"
 // AP name will be: MosquiddoDeth-Setup-a1b2

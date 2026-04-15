@@ -13,7 +13,7 @@
 #include <time.h>
 #include "config.h"
 
-#define FW_VERSION "1.2.0"
+#define FW_VERSION "1.3.0"
 
 // ── Run log (ring buffer on flash) ──
 #define LOG_FILE "/runlog.jsonl"
@@ -47,6 +47,14 @@ float geoLon = 0;
 bool rainCheckEnabled = false;
 unsigned long rainPauseUntil = 0;  // millis() timestamp, 0 = not paused
 bool lastRainSkip = false;         // true if last schedule check was skipped due to rain
+
+// ── Tank level ──
+bool tankEnabled = false;
+int tankEmptyCm = 100;     // distance when tank is empty (sensor to bottom)
+int tankFullCm = 10;       // distance when tank is full (sensor to water surface)
+int tankPercent = -1;       // last reading, -1 = no reading yet
+float tankDistanceCm = 0;  // raw distance for debug
+unsigned long lastTankRead = 0;
 
 // ── Zone ──
 struct ScheduleEntry {
@@ -137,6 +145,7 @@ void logRun(int zone, const char* trigger, int durationSec);
 void trimLog();
 bool checkRainDelay();
 void applyTimezone();
+void readTankLevel();
 
 // ════════════════════════════════════════════
 // Queue operations
@@ -259,7 +268,10 @@ void setup() {
     }
     pinMode(LED_PIN, OUTPUT);
     pinMode(BUTTON_PIN, INPUT_PULLDOWN);
+    pinMode(TANK_TRIG_PIN, OUTPUT);
+    pinMode(TANK_ECHO_PIN, INPUT);
     digitalWrite(LED_PIN, LOW);
+    digitalWrite(TANK_TRIG_PIN, LOW);
 
     // Filesystem
     if (!LittleFS.begin(true)) {
@@ -373,6 +385,7 @@ void loop() {
     checkSchedules();
     receiveBeacons();
     checkWifiReconnect();
+    readTankLevel();
 
     if (millis() - lastBeaconMs >= BEACON_INTERVAL_MS) {
         sendBeacon();
@@ -520,6 +533,9 @@ void loadConfig() {
     geoLat = doc["geo_lat"] | 0.0f;
     geoLon = doc["geo_lon"] | 0.0f;
     rainCheckEnabled = doc["rain_check"] | false;
+    tankEnabled = doc["tank_enabled"] | false;
+    tankEmptyCm = doc["tank_empty_cm"] | 100;
+    tankFullCm = doc["tank_full_cm"] | 10;
 
     JsonArray zarr = doc["zones"].as<JsonArray>();
     int i = 0;
@@ -556,6 +572,9 @@ void saveConfig() {
     doc["geo_lat"] = geoLat;
     doc["geo_lon"] = geoLon;
     doc["rain_check"] = rainCheckEnabled;
+    doc["tank_enabled"] = tankEnabled;
+    doc["tank_empty_cm"] = tankEmptyCm;
+    doc["tank_full_cm"] = tankFullCm;
 
     JsonArray zarr = doc["zones"].to<JsonArray>();
     for (int i = 0; i < NUM_ZONES; i++) {
@@ -601,6 +620,12 @@ String getStatusJson() {
     doc["rain_check"] = rainCheckEnabled;
     doc["rain_paused"] = (rainPauseUntil > 0 && millis() < rainPauseUntil);
     doc["rain_skip"] = lastRainSkip;
+    doc["tank_enabled"] = tankEnabled;
+    doc["tank_percent"] = tankPercent;
+    doc["tank_distance_cm"] = tankDistanceCm;
+    doc["tank_empty_cm"] = tankEmptyCm;
+    doc["tank_full_cm"] = tankFullCm;
+    doc["tank_low"] = (tankEnabled && tankPercent >= 0 && tankPercent <= TANK_LOW_PERCENT);
     doc["ip"] = WiFi.localIP().toString();
     doc["uptime"] = millis() / 1000;
     doc["wifi_rssi"] = WiFi.RSSI();
@@ -823,6 +848,49 @@ bool checkRainDelay() {
     Serial.println("[Rain] No rain current or forecast — spray OK");
     lastRainSkip = false;
     return false;
+}
+
+// ════════════════════════════════════════════
+// Tank level sensor (JSN-SR04T)
+// ════════════════════════════════════════════
+
+void readTankLevel() {
+    if (!tankEnabled) return;
+    if (millis() - lastTankRead < TANK_READ_INTERVAL_MS && tankPercent >= 0) return;
+    lastTankRead = millis();
+
+    // Trigger pulse
+    digitalWrite(TANK_TRIG_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TANK_TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TANK_TRIG_PIN, LOW);
+
+    // Measure echo — timeout at 50ms (~850cm max)
+    long duration = pulseIn(TANK_ECHO_PIN, HIGH, 50000);
+    if (duration == 0) {
+        Serial.println("[Tank] No echo — sensor disconnected or out of range");
+        return;  // keep last reading
+    }
+
+    // Speed of sound = 343m/s = 0.0343 cm/us, round trip /2
+    float distCm = duration * 0.0343 / 2.0;
+    tankDistanceCm = distCm;
+
+    // Clamp to configured range and compute percentage
+    if (distCm <= tankFullCm) {
+        tankPercent = 100;
+    } else if (distCm >= tankEmptyCm) {
+        tankPercent = 0;
+    } else {
+        tankPercent = 100 - (int)(((distCm - tankFullCm) / (tankEmptyCm - tankFullCm)) * 100);
+    }
+
+    Serial.printf("[Tank] %.1f cm — %d%%\n", distCm, tankPercent);
+
+    if (tankPercent <= TANK_LOW_PERCENT) {
+        Serial.printf("[Tank] LOW — %d%% remaining\n", tankPercent);
+    }
 }
 
 // ════════════════════════════════════════════
@@ -1441,6 +1509,10 @@ void setupNormalRoutes() {
         if (doc["geo_lat"].is<float>()) geoLat = doc["geo_lat"].as<float>();
         if (doc["geo_lon"].is<float>()) geoLon = doc["geo_lon"].as<float>();
         if (doc["rain_check"].is<bool>()) rainCheckEnabled = doc["rain_check"].as<bool>();
+        // Tank
+        if (doc["tank_enabled"].is<bool>()) tankEnabled = doc["tank_enabled"].as<bool>();
+        if (doc["tank_empty_cm"].is<int>()) tankEmptyCm = doc["tank_empty_cm"].as<int>();
+        if (doc["tank_full_cm"].is<int>()) tankFullCm = doc["tank_full_cm"].as<int>();
         // Manual pause: {"rain_pause_hours": 24} or 0 to clear
         if (doc["rain_pause_hours"].is<int>()) {
             int h = doc["rain_pause_hours"].as<int>();

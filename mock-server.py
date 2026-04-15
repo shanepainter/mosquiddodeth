@@ -35,6 +35,11 @@ state = {
     "rain_paused": False,
     "rain_pause_until": 0,
     "rain_skip": False,
+    "tank_enabled": True,
+    "tank_empty_cm": 100,
+    "tank_full_cm": 10,
+    "tank_percent": 62,
+    "tank_distance_cm": 44.2,
     "zones": [
         {"name": "Front Yard", "seconds": 90, "active": False, "start": 0, "pin": 26, "queued": False, "trigger": "", "schedules": [
             {"enabled": True, "days": 0b0100100, "hour": 6, "minute": 0}
@@ -102,7 +107,7 @@ def status_json():
             "hostname": state["hostname"],
             "friendly_name": state["friendly_name"],
             "pin_enabled": len(state["pin"]) > 0,
-            "version": "1.2.0",
+            "version": "1.3.0",
             "ip": "192.168.1.100",
             "uptime": int(time.time()) % 86400,
             "wifi_rssi": -52,
@@ -117,6 +122,12 @@ def status_json():
             "rain_check": state["rain_check"],
             "rain_paused": state["rain_paused"],
             "rain_skip": state["rain_skip"],
+            "tank_enabled": state["tank_enabled"],
+            "tank_percent": state["tank_percent"],
+            "tank_distance_cm": state["tank_distance_cm"],
+            "tank_empty_cm": state["tank_empty_cm"],
+            "tank_full_cm": state["tank_full_cm"],
+            "tank_low": state["tank_enabled"] and state["tank_percent"] <= 15,
             "zones": [],
         }
         for z in state["zones"]:
@@ -323,6 +334,12 @@ class Handler(SimpleHTTPRequestHandler):
                     state["geo_lon"] = body["geo_lon"]
                 if "rain_check" in body:
                     state["rain_check"] = body["rain_check"]
+                if "tank_enabled" in body:
+                    state["tank_enabled"] = body["tank_enabled"]
+                if "tank_empty_cm" in body:
+                    state["tank_empty_cm"] = body["tank_empty_cm"]
+                if "tank_full_cm" in body:
+                    state["tank_full_cm"] = body["tank_full_cm"]
                 if "rain_pause_hours" in body:
                     h = body["rain_pause_hours"]
                     if h > 0:

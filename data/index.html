@@ -259,6 +259,19 @@ body {
 .device-item .dev-sub { font-size: 0.8em; color: var(--muted); }
 .device-item .dev-status { font-size: 0.8em; font-weight: 600; }
 
+.tank-bar {
+  width: 80px;
+  height: 12px;
+  background: var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tank-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 6px;
+  transition: width 0.5s, background 0.3s;
+}
 .log-entry {
   display: flex;
   justify-content: space-between;
@@ -294,6 +307,13 @@ body {
   <div class="status-row">
     <span class="status-label">Time</span>
     <span class="status-value" id="device-time">--</span>
+  </div>
+  <div class="status-row" id="tank-row" style="display:none">
+    <span class="status-label">Tank</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="tank-bar"><div class="tank-fill" id="tank-fill"></div></div>
+      <span class="status-value" id="tank-level">--</span>
+    </div>
   </div>
 </div>
 
@@ -352,6 +372,22 @@ body {
     <button class="btn btn-sm btn-outline" onclick="pauseRain(48)">Pause 48h</button>
     <button class="btn btn-sm btn-outline" onclick="pauseRain(0)">Resume</button>
   </div>
+</div>
+
+<div class="card">
+  <h2>Tank Level Sensor</h2>
+  <div class="field-row">
+    <label style="white-space:nowrap;margin:0"><input type="checkbox" id="tank-enabled"> Enable sensor</label>
+  </div>
+  <div class="field-row" style="margin-top:8px">
+    <span class="status-label" style="white-space:nowrap">Empty</span>
+    <input type="number" id="tank-empty" min="1" max="400" placeholder="cm" style="width:70px">
+    <span class="status-label" style="white-space:nowrap">Full</span>
+    <input type="number" id="tank-full" min="1" max="400" placeholder="cm" style="width:70px">
+    <span class="status-label">cm</span>
+    <button class="btn btn-sm btn-outline" onclick="saveTank()">Save</button>
+  </div>
+  <div style="color:var(--muted);font-size:.8em;margin-top:6px">Distance from sensor to water when empty/full. Mount sensor on top of tank pointing down.</div>
 </div>
 
 <div class="card">
@@ -487,6 +523,26 @@ function updateUI(d) {
     rainStatusEl.textContent = 'Weather check disabled';
     rainStatusEl.style.color = 'var(--muted)';
   }
+
+  // Tank
+  const tankRow = document.getElementById('tank-row');
+  if (d.tank_enabled) {
+    tankRow.style.display = '';
+    const pct = d.tank_percent >= 0 ? d.tank_percent : 0;
+    document.getElementById('tank-level').textContent = d.tank_percent >= 0 ? pct + '%' : '--';
+    const fill = document.getElementById('tank-fill');
+    fill.style.width = pct + '%';
+    fill.style.background = pct <= 15 ? 'var(--red)' : pct <= 30 ? 'var(--orange)' : 'var(--green)';
+    if (d.tank_low) document.getElementById('tank-level').style.color = 'var(--red)';
+    else document.getElementById('tank-level').style.color = '';
+  } else {
+    tankRow.style.display = 'none';
+  }
+  document.getElementById('tank-enabled').checked = d.tank_enabled || false;
+  const tankEmptyInput = document.getElementById('tank-empty');
+  const tankFullInput = document.getElementById('tank-full');
+  if (document.activeElement !== tankEmptyInput) tankEmptyInput.value = d.tank_empty_cm || '';
+  if (document.activeElement !== tankFullInput) tankFullInput.value = d.tank_full_cm || '';
 
   // PIN
   const pinStatusEl = document.getElementById('pin-status');
@@ -720,6 +776,13 @@ async function saveRain() {
   const lon = parseFloat(document.getElementById('geo-lon').value) || 0;
   const check = document.getElementById('rain-check').checked;
   await api('/config', { geo_lat: lat, geo_lon: lon, rain_check: check });
+}
+
+async function saveTank() {
+  const enabled = document.getElementById('tank-enabled').checked;
+  const empty = parseInt(document.getElementById('tank-empty').value) || 100;
+  const full = parseInt(document.getElementById('tank-full').value) || 10;
+  await api('/config', { tank_enabled: enabled, tank_empty_cm: empty, tank_full_cm: full });
 }
 
 async function pauseRain(hours) {
