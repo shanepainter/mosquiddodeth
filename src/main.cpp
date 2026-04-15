@@ -1101,6 +1101,15 @@ select{-webkit-appearance:none}
 <h2>Device Name (optional)</h2>
 <input id="name" placeholder="e.g. Back Patio">
 </div>
+<div class="card">
+<h2>Location (for rain delay)</h2>
+<div style="display:flex;gap:8px;align-items:center">
+<input id="lat" type="number" step="0.0001" placeholder="Latitude" style="width:110px">
+<input id="lon" type="number" step="0.0001" placeholder="Longitude" style="width:110px">
+<button class="btn" style="width:auto;padding:10px 16px;background:#58a6ff;font-size:.9em" onclick="geolocate()">Locate</button>
+</div>
+<div style="color:#8b949e;font-size:.8em;margin-top:6px">Tap Locate to use your phone's GPS. Used for automatic rain delay.</div>
+</div>
 <button class="btn" id="save-btn" onclick="save()">Connect &amp; Start</button>
 <div class="status" id="status"></div>
 <script>
@@ -1120,16 +1129,28 @@ async function scan(){
     });
   }catch(e){document.getElementById('networks').innerHTML='<div class="scanning">Scan failed</div>'}
 }
+function geolocate(){
+  if(!navigator.geolocation)return;
+  event.target.textContent='...';
+  navigator.geolocation.getCurrentPosition(
+    p=>{document.getElementById('lat').value=p.coords.latitude.toFixed(4);
+        document.getElementById('lon').value=p.coords.longitude.toFixed(4);
+        event.target.textContent='Locate'},
+    ()=>{event.target.textContent='Denied';setTimeout(()=>event.target.textContent='Locate',2000)},
+    {enableHighAccuracy:false,timeout:10000});
+}
 async function save(){
   const ssid=document.getElementById('ssid').value.trim();
   const pass=document.getElementById('pass').value;
   const name=document.getElementById('name').value.trim();
+  const lat=parseFloat(document.getElementById('lat').value)||0;
+  const lon=parseFloat(document.getElementById('lon').value)||0;
   if(!ssid){document.getElementById('status').textContent='Enter a network name';return}
   document.getElementById('save-btn').disabled=true;
   document.getElementById('status').textContent='Saving and connecting...';
   try{
     const r=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ssid,pass,name})});
+      body:JSON.stringify({ssid,pass,name,lat,lon})});
     const d=await r.json();
     if(d.ok){
       document.getElementById('status').textContent='Connected! Rebooting... Connect to your WiFi and visit http://'+d.hostname+'.local';
@@ -1238,11 +1259,21 @@ void setupSetupRoutes() {
         // Save credentials
         saveWifiCreds(ssid, pass);
 
-        // Save friendly name if provided
+        // Save friendly name and location if provided
+        bool needSave = false;
         if (!name.isEmpty()) {
             friendlyName = name;
-            saveConfig();
+            needSave = true;
         }
+        float lat = doc["lat"] | 0.0f;
+        float lon = doc["lon"] | 0.0f;
+        if (lat != 0 || lon != 0) {
+            geoLat = lat;
+            geoLon = lon;
+            rainCheckEnabled = true;
+            needSave = true;
+        }
+        if (needSave) saveConfig();
 
         // Respond with success — device will reboot
         JsonDocument resp;

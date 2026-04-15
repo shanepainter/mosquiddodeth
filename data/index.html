@@ -342,8 +342,9 @@ body {
     <label style="white-space:nowrap;margin:0"><input type="checkbox" id="rain-check"> Auto-check weather</label>
   </div>
   <div class="field-row" style="margin-top:8px">
-    <input type="number" id="geo-lat" step="0.0001" placeholder="Latitude" style="width:110px;text-align:left">
-    <input type="number" id="geo-lon" step="0.0001" placeholder="Longitude" style="width:110px;text-align:left">
+    <input type="number" id="geo-lat" step="0.0001" placeholder="Latitude" style="width:100px;text-align:left">
+    <input type="number" id="geo-lon" step="0.0001" placeholder="Longitude" style="width:100px;text-align:left">
+    <button class="btn btn-sm btn-outline" onclick="geolocate()" id="geo-btn">Locate</button>
     <button class="btn btn-sm btn-outline" onclick="saveRain()">Save</button>
   </div>
   <div class="field-row" style="margin-top:8px">
@@ -697,6 +698,21 @@ async function saveTz() {
   const offset = parseInt(document.getElementById('tz-select').value);
   const dst = document.getElementById('dst-check').checked ? 3600 : 0;
   await api('/config', { tz_offset: offset, tz_dst: dst });
+}
+
+function geolocate() {
+  const btn = document.getElementById('geo-btn');
+  if (!navigator.geolocation) { btn.textContent = 'N/A'; return; }
+  btn.textContent = '...';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      document.getElementById('geo-lat').value = pos.coords.latitude.toFixed(4);
+      document.getElementById('geo-lon').value = pos.coords.longitude.toFixed(4);
+      btn.textContent = 'Locate';
+    },
+    () => { btn.textContent = 'Denied'; setTimeout(() => btn.textContent = 'Locate', 2000); },
+    { enableHighAccuracy: false, timeout: 10000 }
+  );
 }
 
 async function saveRain() {
