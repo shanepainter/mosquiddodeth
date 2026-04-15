@@ -33,8 +33,9 @@ body {
   -webkit-user-select: none;
   user-select: none;
 }
-h1 { font-size: 1.4em; margin-bottom: 16px; text-align: center; }
+h1 { font-size: 1.4em; margin-bottom: 4px; text-align: center; }
 h1 span { color: var(--red); }
+.device-name { text-align: center; color: var(--muted); font-size: 0.85em; margin-bottom: 16px; }
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -50,32 +51,95 @@ h1 span { color: var(--red); }
 .active { color: var(--green); }
 .inactive { color: var(--muted); }
 
-/* Big spray button */
-.spray-btn {
+/* Buttons */
+.btn {
   display: block;
   width: 100%;
-  padding: 20px;
+  padding: 14px;
   border: none;
-  border-radius: 12px;
-  font-size: 1.2em;
+  border-radius: 10px;
+  font-size: 1em;
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.1s, opacity 0.15s;
   -webkit-tap-highlight-color: transparent;
+  margin-bottom: 8px;
 }
-.spray-btn:active { transform: scale(0.97); }
-.spray-btn.start { background: var(--green); color: #000; }
-.spray-btn.stop { background: var(--red); color: #fff; }
-.spray-btn:disabled { opacity: 0.5; }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; }
+.btn-green { background: var(--green); color: #000; }
+.btn-red { background: var(--red); color: #fff; }
+.btn-blue { background: var(--blue); color: #000; }
+.btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+.btn-sm { padding: 8px 16px; font-size: 0.9em; width: auto; display: inline-block; }
 
-/* Duration input */
-.duration-row {
+/* Run All button */
+.run-all-btn { margin-bottom: 12px; }
+
+/* Zone tabs */
+.zone-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.zone-tab {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.85em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+.zone-tab.selected { background: var(--blue); color: #000; border-color: var(--blue); }
+.zone-tab.zone-active { border-color: var(--green); }
+.zone-tab.zone-active::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.zone-tab.zone-queued { border-color: var(--orange); }
+
+/* Zone panel */
+.zone-panel { display: none; }
+.zone-panel.visible { display: block; }
+.countdown {
+  font-size: 2em;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--green);
+  margin: 8px 0;
+}
+.queued-badge {
+  text-align: center;
+  color: var(--orange);
+  font-weight: 600;
+  font-size: 0.9em;
+  margin: 8px 0;
+}
+
+/* Inputs */
+.field-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 8px;
 }
-.duration-row input {
-  width: 80px;
+.field-row:last-child { margin-bottom: 0; }
+.field-row input[type="number"],
+.field-row input[type="text"] {
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -84,15 +148,8 @@ h1 span { color: var(--red); }
   font-size: 1em;
   text-align: center;
 }
-.duration-row button {
-  padding: 8px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card);
-  color: var(--blue);
-  font-size: 0.9em;
-  cursor: pointer;
-}
+.field-row input[type="text"] { text-align: left; }
+.field-row input[type="number"] { width: 80px; }
 
 /* Schedule */
 .schedule-entry {
@@ -139,11 +196,7 @@ h1 span { color: var(--red); }
   cursor: pointer;
   transition: all 0.15s;
 }
-.day-pill.on {
-  background: var(--blue);
-  color: #fff;
-  border-color: var(--blue);
-}
+.day-pill.on { background: var(--blue); color: #fff; border-color: var(--blue); }
 .toggle {
   width: 44px;
   height: 24px;
@@ -178,23 +231,16 @@ h1 span { color: var(--red); }
 .add-btn {
   display: block;
   width: 100%;
-  padding: 12px;
+  padding: 10px;
   border: 1px dashed var(--border);
   border-radius: 8px;
   background: none;
   color: var(--blue);
-  font-size: 0.9em;
+  font-size: 0.85em;
   cursor: pointer;
 }
-.countdown {
-  font-size: 2em;
-  font-weight: 700;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  color: var(--green);
-  margin: 8px 0;
-}
-.device-name { text-align: center; color: var(--muted); font-size: 0.85em; margin: -12px 0 16px 0; }
+
+/* Devices */
 .device-item {
   display: flex;
   justify-content: space-between;
@@ -213,6 +259,7 @@ h1 span { color: var(--red); }
 .device-item .dev-label { font-weight: 600; font-size: 0.95em; }
 .device-item .dev-sub { font-size: 0.8em; color: var(--muted); }
 .device-item .dev-status { font-size: 0.8em; font-weight: 600; }
+
 .meta { font-size: 0.8em; color: var(--muted); text-align: center; margin-top: 16px; }
 </style>
 </head>
@@ -222,10 +269,13 @@ h1 span { color: var(--red); }
 
 <div class="card" id="status-card">
   <h2>Status</h2>
-  <div class="countdown" id="countdown" style="display:none">--</div>
   <div class="status-row">
-    <span class="status-label">Pump</span>
-    <span class="status-value" id="pump-status">--</span>
+    <span class="status-label">Active</span>
+    <span class="status-value" id="active-status">--</span>
+  </div>
+  <div class="status-row">
+    <span class="status-label">Queue</span>
+    <span class="status-value" id="queue-status">--</span>
   </div>
   <div class="status-row">
     <span class="status-label">WiFi</span>
@@ -237,39 +287,27 @@ h1 span { color: var(--red); }
   </div>
 </div>
 
-<button class="spray-btn start" id="spray-btn" onclick="toggleSpray()">SPRAY</button>
+<button class="btn btn-blue run-all-btn" onclick="runAll()">RUN ALL ZONES</button>
 
-<div class="card" style="margin-top:12px">
-  <h2>Duration</h2>
-  <div class="duration-row">
-    <input type="number" id="duration-input" min="1" max="600" value="90">
-    <span class="status-label">seconds</span>
-    <button onclick="saveDuration()">Save</button>
-  </div>
-</div>
+<div class="zone-tabs" id="zone-tabs"></div>
+<div id="zone-panels"></div>
 
 <div class="card">
   <h2>Device Name</h2>
-  <div class="duration-row">
-    <input type="text" id="name-input" maxlength="32" placeholder="e.g. Back Patio" style="width:160px;text-align:left;">
-    <button onclick="saveName()">Save</button>
+  <div class="field-row">
+    <input type="text" id="name-input" maxlength="32" placeholder="e.g. Back Patio" style="width:160px;">
+    <button class="btn btn-sm btn-outline" onclick="saveName()">Save</button>
   </div>
 </div>
 
 <div class="card">
   <h2>PIN Lock</h2>
   <div id="pin-status" style="font-size:0.9em;margin-bottom:10px;color:var(--muted)">--</div>
-  <div class="duration-row">
+  <div class="field-row">
     <input type="text" id="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="4 digits" style="width:80px;">
-    <button onclick="setPin()">Set PIN</button>
-    <button onclick="clearPin()" style="color:var(--red)">Remove</button>
+    <button class="btn btn-sm btn-outline" onclick="setPin()">Set PIN</button>
+    <button class="btn btn-sm btn-outline" onclick="clearPin()" style="color:var(--red)">Remove</button>
   </div>
-</div>
-
-<div class="card">
-  <h2>Schedules</h2>
-  <div id="schedules-container"></div>
-  <button class="add-btn" onclick="addSchedule()">+ Add Schedule</button>
 </div>
 
 <div class="card" id="devices-card">
@@ -281,7 +319,8 @@ h1 span { color: var(--red); }
 
 <script>
 const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-let state = { active: false, schedules: [], spray_seconds: 90, remaining: 0 };
+let state = {};
+let selectedZone = 0;
 let pollTimer = null;
 let sessionPin = sessionStorage.getItem('pin') || '';
 
@@ -305,27 +344,21 @@ async function api(path, body, retry) {
   try {
     const r = await fetch('/api' + path, opts);
     if (r.status === 403 && !retry) {
-      if (promptPin()) {
-        return api(path, body, true);
-      }
+      if (promptPin()) return api(path, body, true);
       return null;
     }
     const d = await r.json();
     if (d.error === 'pin_required' && !retry) {
-      if (promptPin()) {
-        return api(path, body, true);
-      }
+      if (promptPin()) return api(path, body, true);
       return null;
     }
     updateUI(d);
     return d;
-  } catch(e) {
-    console.error(e);
-  }
+  } catch(e) { console.error(e); }
 }
 
 function updateUI(d) {
-  if (!d) return;
+  if (!d || !d.zones) return;
   state = d;
 
   // Device identity
@@ -333,36 +366,29 @@ function updateUI(d) {
   const label = d.friendly_name || d.hostname || '';
   const sub = d.friendly_name ? `${d.hostname}.local` : '';
   nameEl.textContent = sub ? `${label} (${sub})` : `${label}.local`;
-  document.title = (d.friendly_name || 'Mosquitto Death') + ' — Spray Control';
+  document.title = (d.friendly_name || 'Mosquitto Death');
 
-  // Name input — only set if not focused
+  // Name input
   const nameInput = document.getElementById('name-input');
-  if (document.activeElement !== nameInput) {
-    nameInput.value = d.friendly_name || '';
-  }
+  if (document.activeElement !== nameInput) nameInput.value = d.friendly_name || '';
 
-  // Pump status
-  const pumpEl = document.getElementById('pump-status');
-  const countdownEl = document.getElementById('countdown');
-  const btn = document.getElementById('spray-btn');
-
-  if (d.active) {
-    pumpEl.textContent = 'ACTIVE';
-    pumpEl.className = 'status-value active';
-    countdownEl.style.display = 'block';
-    countdownEl.textContent = d.remaining + 's';
-    btn.textContent = 'STOP';
-    btn.className = 'spray-btn stop';
-    // Poll faster when active
+  // Active zone status
+  const activeEl = document.getElementById('active-status');
+  if (d.active_zone >= 0) {
+    const z = d.zones[d.active_zone];
+    activeEl.textContent = z.name + ' (' + z.remaining + 's)';
+    activeEl.className = 'status-value active';
     setPollRate(1000);
   } else {
-    pumpEl.textContent = 'Idle';
-    pumpEl.className = 'status-value inactive';
-    countdownEl.style.display = 'none';
-    btn.textContent = 'SPRAY';
-    btn.className = 'spray-btn start';
+    activeEl.textContent = 'Idle';
+    activeEl.className = 'status-value inactive';
     setPollRate(5000);
   }
+
+  // Queue
+  const qEl = document.getElementById('queue-status');
+  qEl.textContent = d.queue_size > 0 ? d.queue_size + ' waiting' : 'Empty';
+  qEl.style.color = d.queue_size > 0 ? 'var(--orange)' : 'var(--muted)';
 
   // WiFi
   const rssi = d.wifi_rssi || 0;
@@ -373,8 +399,10 @@ function updateUI(d) {
   // Time
   document.getElementById('device-time').textContent = d.time || '--';
 
-  // Duration input
-  document.getElementById('duration-input').value = d.spray_seconds || 90;
+  // PIN
+  const pinStatusEl = document.getElementById('pin-status');
+  pinStatusEl.textContent = d.pin_enabled ? 'PIN is set' : 'No PIN set';
+  pinStatusEl.style.color = d.pin_enabled ? 'var(--green)' : 'var(--orange)';
 
   // Uptime
   if (d.uptime !== undefined) {
@@ -383,17 +411,131 @@ function updateUI(d) {
     document.getElementById('uptime').textContent = `${d.hostname || ''} · ${d.ip || ''} · Uptime: ${h}h ${m}m`;
   }
 
-  // PIN status
-  const pinStatusEl = document.getElementById('pin-status');
-  pinStatusEl.textContent = d.pin_enabled ? 'PIN is set' : 'No PIN — anyone on the network can control this device';
-  pinStatusEl.style.color = d.pin_enabled ? 'var(--green)' : 'var(--orange)';
-
-  // Schedules
-  renderSchedules(d.schedules || []);
+  renderZoneTabs(d.zones);
+  renderZonePanel(d.zones, selectedZone);
 }
 
-function renderSchedules(scheds) {
-  const container = document.getElementById('schedules-container');
+function renderZoneTabs(zones) {
+  const container = document.getElementById('zone-tabs');
+  container.innerHTML = '';
+  zones.forEach((z, i) => {
+    const tab = document.createElement('div');
+    tab.className = 'zone-tab';
+    if (i === selectedZone) tab.classList.add('selected');
+    if (z.active) tab.classList.add('zone-active');
+    if (z.queued) tab.classList.add('zone-queued');
+    tab.textContent = z.name;
+    tab.onclick = () => { selectedZone = i; renderZoneTabs(zones); renderZonePanel(zones, i); };
+    container.appendChild(tab);
+  });
+}
+
+function renderZonePanel(zones, idx) {
+  const container = document.getElementById('zone-panels');
+  container.innerHTML = '';
+  if (idx >= zones.length) return;
+  const z = zones[idx];
+
+  const panel = document.createElement('div');
+  panel.className = 'zone-panel visible';
+
+  // Countdown / status
+  if (z.active) {
+    const cd = document.createElement('div');
+    cd.className = 'countdown';
+    cd.textContent = z.remaining + 's';
+    panel.appendChild(cd);
+  }
+  if (z.queued) {
+    const qb = document.createElement('div');
+    qb.className = 'queued-badge';
+    qb.textContent = 'QUEUED';
+    panel.appendChild(qb);
+  }
+
+  // Start / Stop button
+  const btn = document.createElement('button');
+  if (z.active) {
+    btn.className = 'btn btn-red';
+    btn.textContent = 'STOP ' + z.name.toUpperCase();
+    btn.onclick = () => api('/zone/stop', { zone: idx });
+  } else {
+    btn.className = 'btn btn-green';
+    btn.textContent = 'SPRAY ' + z.name.toUpperCase();
+    btn.onclick = () => api('/zone/start', { zone: idx });
+  }
+  panel.appendChild(btn);
+
+  // Zone config card
+  const cfgCard = document.createElement('div');
+  cfgCard.className = 'card';
+  cfgCard.innerHTML = '<h2>Zone Settings</h2>';
+
+  const nameRow = document.createElement('div');
+  nameRow.className = 'field-row';
+  const nameIn = document.createElement('input');
+  nameIn.type = 'text';
+  nameIn.maxLength = 24;
+  nameIn.value = z.name;
+  nameIn.style.width = '140px';
+  nameIn.placeholder = 'Zone name';
+  const durIn = document.createElement('input');
+  durIn.type = 'number';
+  durIn.min = 1;
+  durIn.max = 600;
+  durIn.value = z.seconds;
+  const durLabel = document.createElement('span');
+  durLabel.className = 'status-label';
+  durLabel.textContent = 'sec';
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-sm btn-outline';
+  saveBtn.textContent = 'Save';
+  saveBtn.onclick = () => {
+    api('/zone/config', {
+      zone: idx,
+      name: nameIn.value.trim() || z.name,
+      seconds: parseInt(durIn.value) || z.seconds
+    });
+  };
+  nameRow.appendChild(nameIn);
+  nameRow.appendChild(durIn);
+  nameRow.appendChild(durLabel);
+  nameRow.appendChild(saveBtn);
+  cfgCard.appendChild(nameRow);
+
+  const gpioNote = document.createElement('div');
+  gpioNote.style.cssText = 'font-size:0.8em;color:var(--muted);margin-top:8px';
+  gpioNote.textContent = 'GPIO ' + z.pin;
+  cfgCard.appendChild(gpioNote);
+
+  panel.appendChild(cfgCard);
+
+  // Schedules card
+  const schedCard = document.createElement('div');
+  schedCard.className = 'card';
+  schedCard.innerHTML = '<h2>Schedules</h2>';
+
+  const schedContainer = document.createElement('div');
+  renderSchedules(schedContainer, z.schedules || [], idx);
+  schedCard.appendChild(schedContainer);
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-btn';
+  addBtn.textContent = '+ Add Schedule';
+  addBtn.onclick = () => {
+    const scheds = z.schedules || [];
+    if (scheds.length >= 4) return;
+    scheds.push({ enabled: true, days: 0b0100100, hour: 6, minute: 0 });
+    z.schedules = scheds;
+    saveZoneSchedules(idx, scheds);
+  };
+  schedCard.appendChild(addBtn);
+  panel.appendChild(schedCard);
+
+  container.appendChild(panel);
+}
+
+function renderSchedules(container, scheds, zoneIdx) {
   container.innerHTML = '';
   scheds.forEach((s, i) => {
     const div = document.createElement('div');
@@ -401,51 +543,41 @@ function renderSchedules(scheds) {
 
     const header = document.createElement('div');
     header.className = 'schedule-header';
-
     const toggle = document.createElement('div');
     toggle.className = 'toggle' + (s.enabled ? ' on' : '');
-    toggle.onclick = () => { s.enabled = !s.enabled; saveSchedules(); };
-
+    toggle.onclick = () => { s.enabled = !s.enabled; saveZoneSchedules(zoneIdx, scheds); };
     const removeBtn = document.createElement('button');
     removeBtn.className = 'remove-btn';
     removeBtn.textContent = '\u00d7';
-    removeBtn.onclick = () => deleteSchedule(i);
-
+    removeBtn.onclick = () => { scheds.splice(i, 1); saveZoneSchedules(zoneIdx, scheds); };
     header.appendChild(toggle);
     header.appendChild(removeBtn);
     div.appendChild(header);
 
-    // Time inputs
     const timeRow = document.createElement('div');
     timeRow.className = 'schedule-time';
     const hourIn = document.createElement('input');
     hourIn.type = 'number'; hourIn.min = 0; hourIn.max = 23;
     hourIn.value = String(s.hour).padStart(2, '0');
-    hourIn.onchange = () => { s.hour = parseInt(hourIn.value) || 0; saveSchedules(); };
+    hourIn.onchange = () => { s.hour = parseInt(hourIn.value) || 0; saveZoneSchedules(zoneIdx, scheds); };
     const sep = document.createElement('span');
-    sep.textContent = ':';
-    sep.style.color = 'var(--muted)';
-    sep.style.fontSize = '1.2em';
+    sep.textContent = ':'; sep.style.color = 'var(--muted)'; sep.style.fontSize = '1.2em';
     const minIn = document.createElement('input');
     minIn.type = 'number'; minIn.min = 0; minIn.max = 59;
     minIn.value = String(s.minute).padStart(2, '0');
-    minIn.onchange = () => { s.minute = parseInt(minIn.value) || 0; saveSchedules(); };
+    minIn.onchange = () => { s.minute = parseInt(minIn.value) || 0; saveZoneSchedules(zoneIdx, scheds); };
     timeRow.appendChild(hourIn);
     timeRow.appendChild(sep);
     timeRow.appendChild(minIn);
     div.appendChild(timeRow);
 
-    // Day pills
     const pills = document.createElement('div');
     pills.className = 'day-pills';
     DAYS.forEach((name, d) => {
       const pill = document.createElement('div');
       pill.className = 'day-pill' + ((s.days & (1 << d)) ? ' on' : '');
       pill.textContent = name;
-      pill.onclick = () => {
-        s.days ^= (1 << d);
-        saveSchedules();
-      };
+      pill.onclick = () => { s.days ^= (1 << d); saveZoneSchedules(zoneIdx, scheds); };
       pills.appendChild(pill);
     });
     div.appendChild(pills);
@@ -453,64 +585,29 @@ function renderSchedules(scheds) {
   });
 }
 
-async function toggleSpray() {
-  const btn = document.getElementById('spray-btn');
-  btn.disabled = true;
-  if (state.active) {
-    await api('/spray/stop');
-  } else {
-    await api('/spray/start');
-  }
-  btn.disabled = false;
+async function saveZoneSchedules(zoneIdx, scheds) {
+  await api('/zone/schedules', { zone: zoneIdx, schedules: scheds });
 }
 
-async function saveDuration() {
-  const v = parseInt(document.getElementById('duration-input').value);
-  if (v >= 1 && v <= 600) {
-    await api('/config', { spray_seconds: v });
-  }
+async function runAll() {
+  await api('/zone/run-all', {});
 }
 
 async function saveName() {
-  const v = document.getElementById('name-input').value.trim();
-  await api('/config', { friendly_name: v });
+  await api('/config', { friendly_name: document.getElementById('name-input').value.trim() });
 }
 
 async function setPin() {
   const v = document.getElementById('pin-input').value.trim();
-  if (v.length !== 4 || !/^\d{4}$/.test(v)) {
-    alert('PIN must be exactly 4 digits');
-    return;
-  }
+  if (v.length !== 4 || !/^\d{4}$/.test(v)) { alert('PIN must be exactly 4 digits'); return; }
   const result = await api('/config', { new_pin: v });
-  if (result) {
-    sessionPin = v;
-    sessionStorage.setItem('pin', v);
-    document.getElementById('pin-input').value = '';
-  }
+  if (result) { sessionPin = v; sessionStorage.setItem('pin', v); document.getElementById('pin-input').value = ''; }
 }
 
 async function clearPin() {
   await api('/config', { new_pin: '' });
   sessionPin = '';
   sessionStorage.removeItem('pin');
-}
-
-async function saveSchedules() {
-  await api('/schedules', { schedules: state.schedules || [] });
-}
-
-function addSchedule() {
-  const scheds = state.schedules || [];
-  if (scheds.length >= 8) return;
-  scheds.push({ enabled: true, days: 0b0100100, hour: 6, minute: 0 }); // Tue+Sat 6:00
-  state.schedules = scheds;
-  renderSchedules(scheds);
-  saveSchedules();
-}
-
-async function deleteSchedule(i) {
-  await api('/schedules/delete', { index: i });
 }
 
 function setPollRate(ms) {
@@ -530,14 +627,13 @@ function renderDevices(devices) {
   const container = document.getElementById('devices-container');
   container.innerHTML = '';
   if (devices.length <= 1) {
-    container.innerHTML = '<div style="color:var(--muted);font-size:0.85em;text-align:center;padding:8px">No other sprayers found on network</div>';
+    container.innerHTML = '<div style="color:var(--muted);font-size:0.85em;text-align:center;padding:8px">No other sprayers found</div>';
     return;
   }
   devices.forEach(dev => {
     const a = document.createElement('a');
     a.className = 'device-item' + (dev.self ? ' current' : '');
     a.href = dev.self ? '#' : 'http://' + dev.ip;
-    if (!dev.self) a.onclick = () => {};  // allow navigation
     const left = document.createElement('div');
     const label = document.createElement('div');
     label.className = 'dev-label';
@@ -549,7 +645,7 @@ function renderDevices(devices) {
     left.appendChild(sub);
     const status = document.createElement('div');
     status.className = 'dev-status';
-    status.textContent = dev.active ? 'SPRAYING' : 'Idle';
+    status.textContent = dev.active ? 'ACTIVE' : 'Idle';
     status.style.color = dev.active ? 'var(--green)' : 'var(--muted)';
     a.appendChild(left);
     a.appendChild(status);
@@ -557,7 +653,7 @@ function renderDevices(devices) {
   });
 }
 
-// Initial load
+// Init
 api('/status');
 loadDevices();
 setPollRate(5000);

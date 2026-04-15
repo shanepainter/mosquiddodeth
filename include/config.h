@@ -5,9 +5,17 @@
 #define WIFI_PASS "YOUR_PASSWORD"
 
 // ── Hardware ──
-#define RELAY_PIN 26        // GPIO for relay module (active HIGH)
-#define BUTTON_PIN 27       // GPIO for manual pushbutton (pulled LOW, press = HIGH)
+#define BUTTON_PIN 27       // GPIO for manual pushbutton (cycles through zones)
 #define LED_PIN 2           // Onboard LED for status
+
+// ── Zones ──
+// Each zone drives one relay for one spray line.
+// Add/remove entries to match your wiring. Max 8 zones.
+#define NUM_ZONES 4
+const int ZONE_PINS[NUM_ZONES] = { 26, 25, 33, 32 };
+const char* ZONE_DEFAULT_NAMES[NUM_ZONES] = {
+    "Zone 1", "Zone 2", "Zone 3", "Zone 4"
+};
 
 // ── Spray defaults ──
 #define DEFAULT_SPRAY_SECONDS 90
