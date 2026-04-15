@@ -102,6 +102,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.serve_file("apple-touch-icon.png", "image/png")
         elif self.path == "/icon-512.png":
             self.serve_file("icon-512.png", "image/png")
+        elif self.path == "/logo.png":
+            self.serve_file("logo.png", "image/png")
         elif self.path == "/api/status":
             self.json_response(status_json())
         elif self.path == "/api/devices":

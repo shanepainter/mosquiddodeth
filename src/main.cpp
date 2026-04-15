@@ -589,6 +589,9 @@ void setupRoutes() {
     server.on("/icon-512.png", HTTP_GET, [](AsyncWebServerRequest *req) {
         req->send(LittleFS, "/icon-512.png", "image/png");
     });
+    server.on("/logo.png", HTTP_GET, [](AsyncWebServerRequest *req) {
+        req->send(LittleFS, "/logo.png", "image/png");
+    });
 
     // API: status (read-only, no PIN)
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *req) {

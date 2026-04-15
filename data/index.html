@@ -33,8 +33,7 @@ body {
   -webkit-user-select: none;
   user-select: none;
 }
-h1 { font-size: 1.4em; margin-bottom: 4px; text-align: center; }
-h1 span { color: var(--red); }
+.logo { display: block; max-width: 280px; height: auto; margin: 0 auto 4px; }
 .device-name { text-align: center; color: var(--muted); font-size: 0.85em; margin-bottom: 16px; }
 .card {
   background: var(--card);
@@ -264,7 +263,7 @@ h1 span { color: var(--red); }
 </style>
 </head>
 <body>
-<h1>Mosquitto<span>Deth</span></h1>
+<img src="/logo.png" alt="MosquittoDeth" class="logo">
 <div class="device-name" id="device-name"></div>
 
 <div class="card" id="status-card">
