@@ -1,12 +1,9 @@
 #pragma once
 
-// ── WiFi ──
-#define WIFI_SSID "YOUR_SSID"
-#define WIFI_PASS "YOUR_PASSWORD"
-
 // ── Hardware ──
 #define BUTTON_PIN 27       // GPIO for manual pushbutton (cycles through zones)
 #define LED_PIN 2           // Onboard LED for status
+#define SETUP_HOLD_MS 5000  // Hold button 5s to enter setup mode
 
 // ── Zones ──
 // Each zone drives one relay for one spray line.
@@ -29,3 +26,7 @@ const char* ZONE_DEFAULT_NAMES[NUM_ZONES] = {
 // ── mDNS ──
 #define MDNS_HOSTNAME "mosquiddo-deth"
 // Each device appends last 4 hex of MAC: http://mosquiddo-deth-a1b2.local
+
+// ── Setup AP ──
+#define SETUP_AP_PREFIX "MosquiddoDeth-Setup"
+// AP name will be: MosquiddoDeth-Setup-a1b2

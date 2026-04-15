@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""Mock ESP32 server for testing the MosquiddoDeth web UI."""
+"""Mock ESP32 server for testing the MosquiddoDeth web UI.
+
+Usage:
+  python3 mock-server.py          # Normal mode (zone control UI)
+  python3 mock-server.py --setup  # Setup mode (WiFi captive portal)
+"""
 
 import json
+import sys
 import time
 import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 DATA_DIR = Path(__file__).parent / "data"
+SRC_DIR = Path(__file__).parent / "src"
 PORT = 8080
+SETUP_MODE = "--setup" in sys.argv
 
 # ── Fake device state ──
 state = {
@@ -94,8 +102,30 @@ def check_pin(body):
     return body.get("pin", "") == state["pin"]
 
 
+def extract_setup_html():
+    """Extract the setup page HTML from main.cpp PROGMEM string."""
+    cpp = (SRC_DIR / "main.cpp").read_text()
+    start = cpp.find('R"rawliteral(') + len('R"rawliteral(')
+    end = cpp.find(')rawliteral"')
+    if start > 0 and end > start:
+        return cpp[start:end]
+    return "<html><body>Setup HTML not found</body></html>"
+
+SETUP_HTML = extract_setup_html()
+
+# Fake WiFi networks for setup mode
+FAKE_NETWORKS = [
+    {"ssid": "HomeNetwork-5G", "rssi": -42},
+    {"ssid": "HomeNetwork", "rssi": -55},
+    {"ssid": "Neighbors_WiFi", "rssi": -71},
+    {"ssid": "NETGEAR-Guest", "rssi": -78},
+]
+
+
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
+        if SETUP_MODE:
+            return self.do_GET_setup()
         if self.path == "/":
             self.serve_file("index.html", "text/html")
         elif self.path == "/apple-touch-icon.png":
@@ -118,8 +148,29 @@ class Handler(SimpleHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    def do_GET_setup(self):
+        if self.path == "/logo.png":
+            self.serve_file("logo.png", "image/png")
+        elif self.path == "/api/scan":
+            self.json_response({"networks": FAKE_NETWORKS})
+        else:
+            body = SETUP_HTML.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", len(body))
+            self.end_headers()
+            self.wfile.write(body)
+
     def do_POST(self):
         body = self.read_body()
+
+        if SETUP_MODE and self.path == "/api/setup":
+            ssid = body.get("ssid", "")
+            name = body.get("name", "")
+            print(f"[Setup] WiFi: '{ssid}', Name: '{name}'")
+            print("[Setup] In real device, this would save creds and reboot")
+            self.json_response({"ok": True, "hostname": state["hostname"]})
+            return
 
         if self.path == "/api/zone/start":
             if not check_pin(body):
@@ -252,7 +303,12 @@ if __name__ == "__main__":
 
     server = HTTPServer(("0.0.0.0", PORT), Handler)
     print(f"Mock server running at http://localhost:{PORT}")
-    print("Fake zones: Front Yard, Back Patio, Side Yard, Garden")
-    print("Fake peer device: Neighbor's Yard (192.168.1.101)")
+    if SETUP_MODE:
+        print("MODE: Setup (captive portal)")
+        print("Simulates first-boot WiFi provisioning")
+    else:
+        print("MODE: Normal (zone control)")
+        print("Fake zones: Front Yard, Back Patio, Side Yard, Garden")
+        print("Fake peer device: Neighbor's Yard (192.168.1.101)")
     print("Ctrl+C to stop\n")
     server.serve_forever()

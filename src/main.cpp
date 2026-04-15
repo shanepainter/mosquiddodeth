@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <DNSServer.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncTCP.h>
 #include <ArduinoJson.h>
@@ -11,6 +12,8 @@
 
 // ── State ──
 AsyncWebServer server(80);
+DNSServer dnsServer;
+bool setupMode = false;
 
 // ── Device identity ──
 String deviceId;
@@ -76,6 +79,10 @@ Peer peers[MAX_PEERS];
 int peerCount = 0;
 unsigned long lastBeaconMs = 0;
 
+// ── WiFi credentials (stored in LittleFS) ──
+String wifiSSID;
+String wifiPass;
+
 // ── Forward declarations ──
 void startZone(int z);
 void stopZone(int z);
@@ -84,7 +91,12 @@ void enqueueZone(int z);
 void processQueue();
 void loadConfig();
 void saveConfig();
-void setupRoutes();
+bool loadWifiCreds();
+void saveWifiCreds(const String &ssid, const String &pass);
+void clearWifiCreds();
+void startSetupMode();
+void setupNormalRoutes();
+void setupSetupRoutes();
 String getStatusJson();
 String getDevicesJson();
 void checkSchedules();
@@ -127,6 +139,66 @@ void processQueue() {
 }
 
 // ════════════════════════════════════════════
+// WiFi credential management
+// ════════════════════════════════════════════
+
+bool loadWifiCreds() {
+    File f = LittleFS.open("/wifi.json", "r");
+    if (!f) return false;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    if (err) return false;
+
+    wifiSSID = doc["ssid"] | "";
+    wifiPass = doc["pass"] | "";
+    return !wifiSSID.isEmpty();
+}
+
+void saveWifiCreds(const String &ssid, const String &pass) {
+    JsonDocument doc;
+    doc["ssid"] = ssid;
+    doc["pass"] = pass;
+
+    File f = LittleFS.open("/wifi.json", "w");
+    if (f) {
+        serializeJson(doc, f);
+        f.close();
+        Serial.printf("[WiFi] Credentials saved for '%s'\n", ssid.c_str());
+    }
+}
+
+void clearWifiCreds() {
+    LittleFS.remove("/wifi.json");
+    Serial.println("[WiFi] Credentials cleared");
+}
+
+// ════════════════════════════════════════════
+// Setup mode (captive portal)
+// ════════════════════════════════════════════
+
+void startSetupMode() {
+    setupMode = true;
+    WiFi.disconnect();
+    WiFi.mode(WIFI_AP);
+
+    String apName = String(SETUP_AP_PREFIX) + "-" + deviceId;
+    WiFi.softAP(apName.c_str());
+    delay(100);
+
+    // DNS wildcard — redirect all domains to captive portal
+    dnsServer.start(53, "*", WiFi.softAPIP());
+
+    Serial.printf("[Setup] AP started: %s\n", apName.c_str());
+    Serial.printf("[Setup] Connect to WiFi '%s' then open any URL\n", apName.c_str());
+    Serial.printf("[Setup] Portal at http://%s\n", WiFi.softAPIP().toString().c_str());
+
+    setupSetupRoutes();
+    server.begin();
+}
+
+// ════════════════════════════════════════════
 // Setup
 // ════════════════════════════════════════════
 
@@ -164,10 +236,17 @@ void setup() {
 
     loadConfig();
 
-    // WiFi
+    // Try to load saved WiFi credentials
+    if (!loadWifiCreds()) {
+        Serial.println("[WiFi] No saved credentials — entering setup mode");
+        startSetupMode();
+        return;
+    }
+
+    // Connect to saved WiFi
     WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    Serial.print("[WiFi] Connecting");
+    WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+    Serial.printf("[WiFi] Connecting to '%s'", wifiSSID.c_str());
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 40) {
         delay(500);
@@ -178,9 +257,9 @@ void setup() {
         Serial.printf("\n[WiFi] Connected: %s\n", WiFi.localIP().toString().c_str());
         digitalWrite(LED_PIN, HIGH);
     } else {
-        Serial.println("\n[WiFi] Connection failed — restarting in 10s");
-        delay(10000);
-        ESP.restart();
+        Serial.println("\n[WiFi] Connection failed — entering setup mode");
+        startSetupMode();
+        return;
     }
 
     // NTP
@@ -199,7 +278,7 @@ void setup() {
     Serial.println("[Discovery] Beacon started");
 
     // Web server
-    setupRoutes();
+    setupNormalRoutes();
     server.begin();
     Serial.printf("[HTTP] Server started — %d zones configured\n", NUM_ZONES);
 }
@@ -208,7 +287,18 @@ void setup() {
 // Loop
 // ════════════════════════════════════════════
 
+unsigned long buttonHoldStart = 0;
+bool buttonHeld = false;
+
 void loop() {
+    // Setup mode: process DNS + blink LED
+    if (setupMode) {
+        dnsServer.processNextRequest();
+        digitalWrite(LED_PIN, (millis() / 500) % 2);  // blink
+        delay(10);
+        return;
+    }
+
     // Auto-stop active zone after its duration
     if (activeZone >= 0) {
         Zone &z = zones[activeZone];
@@ -218,6 +308,26 @@ void loop() {
     }
 
     processQueue();
+
+    // Long-press detection: hold button 5s to enter setup mode
+    bool btnState = digitalRead(BUTTON_PIN);
+    if (btnState == HIGH) {
+        if (!buttonHeld) {
+            buttonHeld = true;
+            buttonHoldStart = millis();
+        } else if (millis() - buttonHoldStart >= SETUP_HOLD_MS) {
+            Serial.println("[Button] Long press — entering setup mode");
+            clearWifiCreds();
+            delay(500);
+            ESP.restart();
+        }
+    } else {
+        if (buttonHeld && millis() - buttonHoldStart < SETUP_HOLD_MS) {
+            // Short press — normal button behavior handled below
+        }
+        buttonHeld = false;
+    }
+
     checkButton();
     checkSchedules();
     receiveBeacons();
@@ -575,10 +685,217 @@ bool checkPin(AsyncWebServerRequest *req, const JsonDocument &doc) {
 }
 
 // ════════════════════════════════════════════
-// Web routes
+// Setup portal routes (captive portal)
 // ════════════════════════════════════════════
 
-void setupRoutes() {
+// Inline setup page HTML
+const char SETUP_HTML[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>MosquiddoDeth Setup</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:20px;max-width:420px;margin:0 auto}
+.logo{display:block;max-width:240px;height:auto;margin:0 auto 20px}
+h2{font-size:1em;color:#8b949e;text-transform:uppercase;letter-spacing:.05em;margin:16px 0 8px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;margin-bottom:12px}
+label{display:block;color:#8b949e;font-size:.85em;margin-bottom:4px}
+input,select{width:100%;padding:10px;border:1px solid #30363d;border-radius:8px;background:#0d1117;color:#e6edf3;font-size:1em;margin-bottom:12px}
+select{-webkit-appearance:none}
+.btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:1.1em;font-weight:700;cursor:pointer;background:#3fb950;color:#000}
+.btn:disabled{opacity:.5}
+.status{text-align:center;color:#8b949e;font-size:.9em;margin-top:12px;min-height:20px}
+.net{padding:8px 12px;background:#0d1117;border:1px solid #30363d;border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between}
+.net:active{border-color:#58a6ff}
+.net .rssi{color:#8b949e;font-size:.85em}
+.scanning{text-align:center;color:#8b949e;padding:20px}
+</style>
+</head><body>
+<img src="/logo.png" alt="MosquiddoDeth" class="logo">
+<div class="card">
+<h2>WiFi Network</h2>
+<div id="networks"><div class="scanning">Scanning...</div></div>
+<label>Or enter manually:</label>
+<input id="ssid" placeholder="Network name (SSID)">
+<label>Password</label>
+<input id="pass" type="password" placeholder="WiFi password">
+</div>
+<div class="card">
+<h2>Device Name (optional)</h2>
+<input id="name" placeholder="e.g. Back Patio">
+</div>
+<button class="btn" id="save-btn" onclick="save()">Connect &amp; Start</button>
+<div class="status" id="status"></div>
+<script>
+async function scan(){
+  try{
+    const r=await fetch('/api/scan');
+    const d=await r.json();
+    const c=document.getElementById('networks');
+    if(!d.networks||!d.networks.length){c.innerHTML='<div class="scanning">No networks found</div>';return}
+    c.innerHTML='';
+    d.networks.forEach(n=>{
+      const div=document.createElement('div');
+      div.className='net';
+      div.innerHTML='<span>'+n.ssid+'</span><span class="rssi">'+n.rssi+' dBm</span>';
+      div.onclick=()=>{document.getElementById('ssid').value=n.ssid};
+      c.appendChild(div);
+    });
+  }catch(e){document.getElementById('networks').innerHTML='<div class="scanning">Scan failed</div>'}
+}
+async function save(){
+  const ssid=document.getElementById('ssid').value.trim();
+  const pass=document.getElementById('pass').value;
+  const name=document.getElementById('name').value.trim();
+  if(!ssid){document.getElementById('status').textContent='Enter a network name';return}
+  document.getElementById('save-btn').disabled=true;
+  document.getElementById('status').textContent='Saving and connecting...';
+  try{
+    const r=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ssid,pass,name})});
+    const d=await r.json();
+    if(d.ok){
+      document.getElementById('status').textContent='Connected! Rebooting... Connect to your WiFi and visit http://'+d.hostname+'.local';
+    }else{
+      document.getElementById('status').textContent='Failed: '+(d.error||'unknown error');
+      document.getElementById('save-btn').disabled=false;
+    }
+  }catch(e){
+    document.getElementById('status').textContent='Error: '+e.message;
+    document.getElementById('save-btn').disabled=false;
+  }
+}
+scan();
+</script>
+</body></html>
+)rawliteral";
+
+void setupSetupRoutes() {
+    // Captive portal detection — redirect all GETs to setup page
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
+        req->send(200, "text/html", SETUP_HTML);
+    });
+    server.on("/logo.png", HTTP_GET, [](AsyncWebServerRequest *req) {
+        req->send(LittleFS, "/logo.png", "image/png");
+    });
+
+    // Captive portal detection endpoints (iOS/Android/Windows)
+    server.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *req) {
+        req->send(200, "text/html", SETUP_HTML);
+    });
+    server.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *req) {
+        req->send(200, "text/html", SETUP_HTML);
+    });
+    server.on("/connecttest.txt", HTTP_GET, [](AsyncWebServerRequest *req) {
+        req->send(200, "text/html", SETUP_HTML);
+    });
+    server.on("/canonical.html", HTTP_GET, [](AsyncWebServerRequest *req) {
+        req->send(200, "text/html", SETUP_HTML);
+    });
+
+    // Scan for nearby networks
+    server.on("/api/scan", HTTP_GET, [](AsyncWebServerRequest *req) {
+        int n = WiFi.scanComplete();
+        if (n == WIFI_SCAN_FAILED) {
+            WiFi.scanNetworks(true);  // async scan
+            req->send(200, "application/json", "{\"networks\":[]}");
+            return;
+        }
+        if (n == WIFI_SCAN_RUNNING) {
+            req->send(200, "application/json", "{\"networks\":[]}");
+            return;
+        }
+
+        JsonDocument doc;
+        JsonArray arr = doc["networks"].to<JsonArray>();
+
+        // Deduplicate by SSID, keep strongest signal
+        for (int i = 0; i < n; i++) {
+            String ssid = WiFi.SSID(i);
+            if (ssid.isEmpty()) continue;
+
+            bool dupe = false;
+            for (JsonObject existing : arr) {
+                if (existing["ssid"].as<String>() == ssid) {
+                    dupe = true;
+                    if (WiFi.RSSI(i) > existing["rssi"].as<int>()) {
+                        existing["rssi"] = WiFi.RSSI(i);
+                    }
+                    break;
+                }
+            }
+            if (!dupe) {
+                JsonObject obj = arr.add<JsonObject>();
+                obj["ssid"] = ssid;
+                obj["rssi"] = WiFi.RSSI(i);
+            }
+        }
+
+        WiFi.scanDelete();
+        WiFi.scanNetworks(true);  // start next scan
+
+        String out;
+        serializeJson(doc, out);
+        req->send(200, "application/json", out);
+    });
+
+    // Save credentials and attempt connection
+    server.on("/api/setup", HTTP_POST, [](AsyncWebServerRequest *req) {},
+    NULL,
+    [](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t index, size_t total) {
+        JsonDocument doc;
+        if (deserializeJson(doc, data, len)) {
+            req->send(400, "application/json", "{\"error\":\"invalid json\"}");
+            return;
+        }
+
+        String ssid = doc["ssid"] | "";
+        String pass = doc["pass"] | "";
+        String name = doc["name"] | "";
+
+        if (ssid.isEmpty()) {
+            req->send(400, "application/json", "{\"error\":\"ssid required\"}");
+            return;
+        }
+
+        // Save credentials
+        saveWifiCreds(ssid, pass);
+
+        // Save friendly name if provided
+        if (!name.isEmpty()) {
+            friendlyName = name;
+            saveConfig();
+        }
+
+        // Respond with success — device will reboot
+        JsonDocument resp;
+        resp["ok"] = true;
+        resp["hostname"] = hostname;
+        String out;
+        serializeJson(resp, out);
+        req->send(200, "application/json", out);
+
+        // Reboot after response is sent
+        delay(1500);
+        ESP.restart();
+    });
+
+    // Catch-all for captive portal
+    server.onNotFound([](AsyncWebServerRequest *req) {
+        req->redirect("/");
+    });
+
+    // Start WiFi scan immediately
+    WiFi.scanNetworks(true);
+}
+
+// ════════════════════════════════════════════
+// Normal mode routes
+// ════════════════════════════════════════════
+
+void setupNormalRoutes() {
     // Static assets
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
         req->send(LittleFS, "/index.html", "text/html");
