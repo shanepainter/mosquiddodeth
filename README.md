@@ -16,6 +16,7 @@
   <img alt="Build" src="https://img.shields.io/badge/build-PlatformIO%20%2F%20Arduino-111">
   <img alt="UI" src="https://img.shields.io/badge/UI-LittleFS%20web%20app-111">
   <img alt="Firmware" src="https://img.shields.io/badge/firmware-v1.3.0-2bb673">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
 
 ---
@@ -88,3 +89,8 @@ platformio.ini          build configuration
 wiring-diagram.drawio   wiring reference
 version.json            OTA manifest (version + firmware URL)
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
